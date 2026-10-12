@@ -1,3 +1,9 @@
+## 🚀 Live Demo
+
+**[🌐 Open AI-Powered Travel Companion](https://ai-powered-travel-companion.onrender.com)**
+
+Try the deployed application to explore its AI-powered travel planning and other available features.
+
 # Smart Local Guide — Full-Stack Web Application
 
 An intelligent, full-stack AI-assisted local discovery platform, multi-day itinerary planner, work-friendly café locator, and 24/7 emergency medical care guide.
