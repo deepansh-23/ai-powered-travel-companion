@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Local Guide — Discover Places, Cafés, Medical Care & Itineraries</title>
+  <meta name="description" content="AI-assisted local discovery platform. Discover nearby places, plan multi-day itineraries, locate quiet work cafés, and find 24/7 emergency medical facilities.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Core Styles -->
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Navbar -->
+    <header class="app-navbar" role="banner">
+      <div class="navbar-inner">
+        <a href="index.html" class="brand-link" aria-label="Smart Local Guide Home">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span>Smart Local Guide</span>
+        </a>
+
+        <nav class="nav-links" aria-label="Main Navigation">
+          <a href="index.html" class="nav-link">Home</a>
+          <a href="pages/itinerary.html" class="nav-link">Itinerary Planner</a>
+          <div class="nav-dropdown">
+            <button class="nav-link nav-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+              <span>Other Services</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+              <a href="pages/places.html" class="nav-dropdown-item" role="menuitem">📍 Places Near You</a>
+              <a href="pages/area.html" class="nav-dropdown-item" role="menuitem">🏙️ Area Guide</a>
+              <a href="pages/cafes.html" class="nav-dropdown-item" role="menuitem">☕ Quiet Work Cafés</a>
+              <a href="pages/medical.html" class="nav-dropdown-item" role="menuitem">🏥 24/7 Medical Care</a>
+            </div>
+          </div>
+          <a href="pages/history.html" class="nav-link">History / PDF</a>
+          <a href="pages/reviews.html" class="nav-link">Reviews</a>
+        </nav>
+
+        <div class="navbar-actions">
+          <div class="theme-selector-wrapper">
+            <label for="themeSelect" class="sr-only">Choose Color Theme</label>
+            <select id="themeSelect" class="theme-dropdown" aria-label="Select theme">
+              <option value="warm">Warm Aesthetic</option>
+              <option value="rose-gold">Rose Gold</option>
+              <option value="sage-green">Sage Green</option>
+              <option value="classic-light">Classic Light</option>
+              <option value="dark">Dark Theme</option>
+            </select>
+          </div>
+
+          <button id="mobileNavToggle" class="mobile-nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Drawer -->
+      <div id="mobileDrawer" class="mobile-drawer" role="navigation" aria-label="Mobile Navigation">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="pages/itinerary.html" class="nav-link">Itinerary Planner</a>
+        <div class="mobile-drawer-group-title">Other Services</div>
+        <a href="pages/places.html" class="nav-link">📍 Places Near You</a>
+        <a href="pages/area.html" class="nav-link">🏙️ Area Guide</a>
+        <a href="pages/cafes.html" class="nav-link">☕ Quiet Work Cafés</a>
+        <a href="pages/medical.html" class="nav-link">🏥 24/7 Medical Care</a>
+        <div class="mobile-drawer-group-title">Account & Feedback</div>
+        <a href="pages/history.html" class="nav-link">History / PDF</a>
+        <a href="pages/reviews.html" class="nav-link">Reviews</a>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Hero Section (Section 7) -->
+      <section class="hero-section">
+        <div class="hero-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>AI-Assisted Local Discovery & Navigation</span>
+        </div>
+        <h1 class="hero-title">Explore Your City with <span class="highlight">Intelligence</span> and Ease</h1>
+        <p class="hero-subtitle">
+          Personalized itineraries, verified local attractions with interactive route planning, work-friendly study cafés, and reliable 24/7 emergency medical care.
+        </p>
+        <div class="hero-actions">
+          <a href="pages/itinerary.html" class="btn btn-primary">
+            <span>Plan a Door-to-Door Trip</span>
+          </a>
+          <a href="pages/places.html" class="btn btn-secondary">
+            <span>Explore Nearby Places</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- Features Grid (Section 7) -->
+      <section class="features-grid" aria-label="Main Application Features">
+        <!-- Feature 1: Itinerary -->
+        <a href="pages/itinerary.html" class="feature-card" style="grid-column:1/-1;border-width:2px;">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+          </div>
+          <h2 class="feature-title">Itinerary Planner <span class="badge badge-primary" style="vertical-align:middle;">Main</span></h2>
+          <p class="feature-description">Plan door to door: pick source and destination, compare flights and trains, choose a hotel, then get a time-aware local itinerary with real places, costs and a downloadable PDF.</p>
+          <span class="feature-arrow">Plan Trip &rarr;</span>
+        </a>
+
+        <h3 style="grid-column:1/-1;margin-top:8px;">Other Services</h3>
+
+        <!-- Feature 2: Places Near You -->
+        <a href="pages/places.html" class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <h2 class="feature-title">Places Near You</h2>
+          <p class="feature-description">Discover hotels, museums, parks, and viewpoints on an interactive map. Filter dynamically and view walking or driving routes in real time.</p>
+          <span class="feature-arrow">Explore Map &rarr;</span>
+        </a>
+
+        <!-- Feature 3: Area Guide -->
+        <a href="pages/area.html" class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </div>
+          <h2 class="feature-title">Area Guide</h2>
+          <p class="feature-description">Understand neighborhoods with 12 analytical sections covering walkability, dining, safety, advantages, limitations, and transit hubs.</p>
+          <span class="feature-arrow">Read Guide &rarr;</span>
+        </a>
+
+        <!-- Feature 4: Quiet Work Cafés -->
+        <a href="pages/cafes.html" class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+          </div>
+          <h2 class="feature-title">Quiet Work Cafés</h2>
+          <p class="feature-description">Find study-friendly coffee spots filtered by validated amenities like high-speed Wi-Fi, power charging outlets, quiet zones, and seating.</p>
+          <span class="feature-arrow">Find Workspots &rarr;</span>
+        </a>
+
+        <!-- Feature 5: 24/7 Medical Care -->
+        <a href="pages/medical.html" class="feature-card">
+          <div class="feature-icon-wrapper" style="background-color:var(--color-danger-light);color:var(--color-danger);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v12M6 12h12M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/></svg>
+          </div>
+          <h2 class="feature-title">24/7 Medical Care</h2>
+          <p class="feature-description">Locate urgent treatment centers, emergency departments, and late-night dispensaries with verified 24/7 statuses and immediate phone links.</p>
+          <span class="feature-arrow">Locate Care &rarr;</span>
+        </a>
+
+        <h3 style="grid-column:1/-1;margin-top:8px;">History / PDF &amp; Reviews</h3>
+
+        <!-- Feature 6: History & Exports -->
+        <a href="pages/history.html" class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+          </div>
+          <h2 class="feature-title">History & Exports</h2>
+          <p class="feature-description">Review previously generated plans, search results, and neighborhood reports with full PDF exports and text-to-speech audio support.</p>
+          <span class="feature-arrow">View History &rarr;</span>
+        </a>
+
+        <!-- Feature 7: Reviews -->
+        <a href="pages/reviews.html" class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <h2 class="feature-title">Reviews</h2>
+          <p class="feature-description">Rate Smart Local Guide and read what other travellers have said.</p>
+          <span class="feature-arrow">Read Reviews &rarr;</span>
+        </a>
+      </section>
+
+      <!-- How It Works Section (Section 7) -->
+      <section class="info-section">
+        <div class="section-header">
+          <h2>How Smart Local Guide Works</h2>
+          <p>Strict data verification guarantees authentic information without fabricated ratings or addresses.</p>
+        </div>
+        <div class="steps-grid">
+          <div class="step-item">
+            <div class="step-number">1</div>
+            <h3>Set Your Location</h3>
+            <p>Use browser geolocation with explicit permission or type any city center to anchor your search.</p>
+          </div>
+          <div class="step-item">
+            <div class="step-number">2</div>
+            <h3>Filter with Precision</h3>
+            <p>Select categories and amenities. The interactive map and cards synchronize instantly from shared state.</p>
+          </div>
+          <div class="step-item">
+            <div class="step-number">3</div>
+            <h3>Navigate & Export</h3>
+            <p>Click any place to preview walking or driving routes, access verified websites, and export your itinerary.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Top reviews (general: Overall Website / Itinerary Planner) -->
+      <section class="home-reviews" aria-labelledby="homeReviewsTitle">
+        <div class="home-reviews-head">
+          <div>
+            <h2 id="homeReviewsTitle">What travellers say</h2>
+            <p>Top reviews of Smart Local Guide and the Itinerary Planner.</p>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" data-open-review="Overall Website">★ Write a review</button>
+            <a href="pages/reviews.html" class="btn btn-secondary">Read all reviews</a>
+          </div>
+        </div>
+        <div id="homeReviewsGrid" class="home-reviews-grid">
+          <div class="empty-state"><p>Loading reviews…</p></div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer" role="contentinfo">
+      <div class="footer-inner">
+        <div>
+          <strong>Smart Local Guide</strong> — Full-Stack Portfolio Application
+          <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:2px;">Built with HTML5, CSS3, Vanilla JS & FastAPI.</p>
+        </div>
+        <ul class="footer-links">
+          <li><a href="pages/places.html">Places</a></li>
+          <li><a href="pages/cafes.html">Cafés</a></li>
+          <li><a href="pages/medical.html">Medical</a></li>
+          <li><a href="pages/itinerary.html">Itinerary</a></li>
+          <li><a href="pages/history.html">History</a></li>
+        </ul>
+      </div>
+    </footer>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

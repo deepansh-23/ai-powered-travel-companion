@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Door-to-Door Itinerary Planner — Smart Local Guide</title>
+  <meta name="description" content="Door-to-door trip planner with SerpApi Google Flights, RailRadar trains, SerpApi Google Hotels price comparison, and time-aware local itineraries.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Core Styles -->
+  <link rel="stylesheet" href="../css/variables.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/pages.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Navbar (Section 26) -->
+    <header class="app-navbar" role="banner">
+      <div class="navbar-inner">
+        <a href="../index.html" class="brand-link" aria-label="Smart Local Guide Home">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span>Smart Local Guide</span>
+        </a>
+
+        <nav class="nav-links" aria-label="Main Navigation">
+          <a href="../index.html" class="nav-link">Home</a>
+          <a href="itinerary.html" class="nav-link">Itinerary Planner</a>
+          <div class="nav-dropdown">
+            <button class="nav-link nav-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+              <span>Other Services</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+              <a href="places.html" class="nav-dropdown-item" role="menuitem">📍 Places Near You</a>
+              <a href="area.html" class="nav-dropdown-item" role="menuitem">🏙️ Area Guide</a>
+              <a href="cafes.html" class="nav-dropdown-item" role="menuitem">☕ Quiet Work Cafés</a>
+              <a href="medical.html" class="nav-dropdown-item" role="menuitem">🏥 24/7 Medical Care</a>
+            </div>
+          </div>
+          <a href="history.html" class="nav-link">History / PDF</a>
+          <a href="reviews.html" class="nav-link">Reviews</a>
+        </nav>
+
+        <div class="navbar-actions">
+          <div class="theme-selector-wrapper">
+            <label for="themeSelect" class="sr-only">Choose Color Theme</label>
+            <select id="themeSelect" class="theme-dropdown" aria-label="Select theme">
+              <option value="warm">Warm Aesthetic</option>
+              <option value="rose-gold">Rose Gold</option>
+              <option value="sage-green">Sage Green</option>
+              <option value="classic-light">Classic Light</option>
+              <option value="dark">Dark Theme</option>
+            </select>
+          </div>
+
+          <button id="mobileNavToggle" class="mobile-nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Drawer -->
+      <div id="mobileDrawer" class="mobile-drawer" role="navigation" aria-label="Mobile Navigation">
+        <a href="../index.html" class="nav-link">Home</a>
+        <a href="itinerary.html" class="nav-link">Itinerary Planner</a>
+        <div class="mobile-drawer-group-title">Other Services</div>
+        <a href="places.html" class="nav-link">📍 Places Near You</a>
+        <a href="area.html" class="nav-link">🏙️ Area Guide</a>
+        <a href="cafes.html" class="nav-link">☕ Quiet Work Cafés</a>
+        <a href="medical.html" class="nav-link">🏥 24/7 Medical Care</a>
+        <div class="mobile-drawer-group-title">Account & Feedback</div>
+        <a href="history.html" class="nav-link">History / PDF</a>
+        <a href="reviews.html" class="nav-link">Reviews</a>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h1 class="page-title">Door-to-Door Trip Planner</h1>
+          <p class="page-description">Source → Destination → Outbound & Return Transport → Hotel Discovery → Time-Aware Local Itinerary.</p>
+        </div>
+        <div id="headerActions" style="display:none;">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnGenerateNewTrip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+            <span>Generate New Trip</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Planner Progress Steps Bar -->
+      <div class="planner-steps-bar" role="navigation" aria-label="Trip planning steps" style="display:flex;gap:8px;margin-bottom:var(--space-lg);overflow-x:auto;padding-bottom:6px;">
+        <div class="planner-step-badge active" id="stepBadge1">1. Route & Dates</div>
+        <div class="planner-step-badge" id="stepBadge2">2. Transport Selection</div>
+        <div class="planner-step-badge" id="stepBadge3">3. Hotel Selection</div>
+        <div class="planner-step-badge" id="stepBadge4">4. Local Preferences</div>
+        <div class="planner-step-badge" id="stepBadge5">5. Final Itinerary</div>
+      </div>
+
+      <!-- STEP 1: Route, Dates & Transport Search Form (Sections 3, 4, 5) -->
+      <div class="itinerary-form-card" id="step1Card">
+        <h2 style="font-size:1.25rem;font-family:var(--font-heading);margin-bottom:14px;color:var(--color-text-primary);">
+          1. Trip Origin, Destination & Dates
+        </h2>
+        <form id="transportSearchForm" class="itinerary-grid-form">
+          <div class="form-group">
+            <label for="itinerarySource" class="form-label">Origin / Starting City</label>
+            <input type="text" id="itinerarySource" class="form-input" placeholder="e.g. Delhi, Mumbai, Bengaluru..." required>
+          </div>
+
+          <div class="form-group">
+            <label for="itineraryDest" class="form-label">Destination City</label>
+            <input type="text" id="itineraryDest" class="form-input" placeholder="e.g. Amritsar, Goa, Jaipur..." required>
+          </div>
+
+          <div class="form-group">
+            <label for="itineraryDepDate" class="form-label">Departure Date</label>
+            <input type="date" id="itineraryDepDate" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label for="itineraryRetDate" class="form-label">Return Date</label>
+            <input type="date" id="itineraryRetDate" class="form-input" required>
+          </div>
+
+          <div class="form-group">
+            <label for="itineraryTravelers" class="form-label">Number of Travellers</label>
+            <input type="number" id="itineraryTravelers" class="form-input" min="1" max="20" value="1" required>
+          </div>
+
+          <div class="form-group">
+            <label for="itineraryPreference" class="form-label">Travel Preference</label>
+            <select id="itineraryPreference" class="form-select">
+              <option value="best-overall" selected>Best Overall (Balanced)</option>
+              <option value="cheapest">Cheapest (Lowest Fare)</option>
+              <option value="fastest">Fastest (Shortest Travel Time)</option>
+              <option value="prefer-flight">Prefer Flight</option>
+              <option value="prefer-train">Prefer Train</option>
+              <option value="no-preference">No Preference</option>
+            </select>
+          </div>
+
+          <div style="grid-column: 1 / -1; margin-top: 8px;">
+            <button type="submit" class="btn btn-primary" id="btnSearchTransport" style="width:100%;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Search Outbound & Return Transport (Flights + Trains)</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- STEP 2: Transport Comparison & Selection Container (Sections 6, 7, 9, 10) -->
+      <section id="step2Section" style="display:none;margin-bottom:var(--space-xl);" aria-label="Transport Options">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <h2 style="font-size:1.35rem;font-family:var(--font-heading);color:var(--color-text-primary);">
+            2. Select Outbound and Return Transport
+          </h2>
+          <span class="badge badge-primary" id="transportRouteSummaryBadge">Outbound & Return</span>
+        </div>
+
+        <!-- Outbound Leg -->
+        <div class="transport-leg-card" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-lg);margin-bottom:var(--space-lg);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="font-size:1.15rem;color:var(--color-primary);margin:0;">🛫 Outbound Journey</h3>
+            <span id="selectedOutboundStatus" style="font-weight:600;font-size:0.9rem;color:var(--color-text-muted);">Please select an option</span>
+          </div>
+          <div id="outboundTransportList" class="transport-options-grid"></div>
+        </div>
+
+        <!-- Return Leg -->
+        <div class="transport-leg-card" style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-lg);margin-bottom:var(--space-lg);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h3 style="font-size:1.15rem;color:var(--color-primary);margin:0;">🛬 Return Journey</h3>
+            <span id="selectedReturnStatus" style="font-weight:600;font-size:0.9rem;color:var(--color-text-muted);">Please select an option</span>
+          </div>
+          <div id="returnTransportList" class="transport-options-grid"></div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button type="button" class="btn btn-primary" id="btnProceedToHotels" disabled>
+            <span>Proceed to Hotel Selection &rarr;</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 3: Hotel Search & Price Comparison Container (Section 7A) -->
+      <section id="step3Section" style="display:none;margin-bottom:var(--space-xl);" aria-label="Hotel Selection">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <h2 style="font-size:1.35rem;font-family:var(--font-heading);color:var(--color-text-primary);">
+              3. Choose Accommodation (SerpApi Google Hotels)
+            </h2>
+            <p style="font-size:0.9rem;color:var(--color-text-muted);">Compare real prices across booking sites or skip to continue without hotel.</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="hotelSortSelect" class="form-select" style="font-size:0.85rem;padding:6px 10px;">
+              <option value="relevance">Sort: Recommended</option>
+              <option value="lowest_price">Sort: Lowest Price</option>
+              <option value="highest_rating">Sort: Highest Rating</option>
+              <option value="most_reviewed">Sort: Most Reviewed</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnSkipHotel">
+              <span>Skip Hotel Selection</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="hotelListContainer" class="cards-grid" style="margin-bottom:var(--space-lg);"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <button type="button" class="btn btn-secondary" id="btnBackToTransport">
+            <span>&larr; Back to Transport</span>
+          </button>
+          <button type="button" class="btn btn-primary" id="btnProceedToLocalPrefs">
+            <span id="hotelProceedLabel">Continue with Selected Hotel &rarr;</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 4: Local Itinerary Preferences Card (Sections 12, 13) -->
+      <section id="step4Section" style="display:none;margin-bottom:var(--space-xl);" aria-label="Local Itinerary Preferences">
+        <div class="itinerary-form-card">
+          <h2 style="font-size:1.3rem;font-family:var(--font-heading);margin-bottom:12px;color:var(--color-text-primary);">
+            4. Local Trip Preferences & Activities
+          </h2>
+          <form id="localPrefsForm" class="itinerary-grid-form">
+            <!-- Budget Control -->
+            <div class="form-group budget-control-group" style="grid-column: 1 / -1;">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                <label for="itineraryBudgetInput" class="form-label" style="margin-bottom:0;">
+                  Daily Local Budget (Food & Activities per person)
+                </label>
+                <div class="budget-input-wrapper" style="display:flex;align-items:center;gap:6px;">
+                  <span style="font-weight:600;font-size:1.1rem;color:var(--color-text-main);">₹</span>
+                  <input type="number" id="itineraryBudgetInput" class="form-input" min="1000" max="100000" step="1" value="3000" style="width:130px;font-weight:600;" required>
+                </div>
+              </div>
+              <div class="budget-slider-wrapper" style="display:flex;align-items:center;gap:12px;">
+                <span style="font-size:0.8rem;color:var(--color-text-muted);">₹1,000</span>
+                <input type="range" id="itineraryBudgetSlider" min="1000" max="100000" step="500" value="3000" style="flex:1;cursor:pointer;">
+                <span style="font-size:0.8rem;color:var(--color-text-muted);">₹100,000</span>
+              </div>
+            </div>
+
+            <!-- Interests Chips (Section 12) -->
+            <div class="interests-selector-group" style="grid-column: 1 / -1;">
+              <label class="form-label">Key Travel Interests (Select all that apply)</label>
+              <div class="chip-selection-grid">
+                <button type="button" class="select-chip active" data-value="history">🏛️ History</button>
+                <button type="button" class="select-chip active" data-value="food">🍽️ Food & Dining</button>
+                <button type="button" class="select-chip" data-value="museums">🎨 Art & Museums</button>
+                <button type="button" class="select-chip" data-value="parks">🌳 Parks & Nature</button>
+                <button type="button" class="select-chip" data-value="cafes">☕ Cafés</button>
+                <button type="button" class="select-chip" data-value="architecture">🏙️ Architecture</button>
+                <button type="button" class="select-chip" data-value="shopping">🛍️ Shopping</button>
+                <button type="button" class="select-chip" data-value="nightlife">🍸 Nightlife</button>
+                <button type="button" class="select-chip" data-value="work-friendly">💻 Work-friendly</button>
+                <button type="button" class="select-chip" data-value="hidden-gems">✨ Hidden Gems</button>
+                <button type="button" class="select-chip" data-value="beaches">🏖️ Beaches</button>
+                <button type="button" class="select-chip" data-value="adventure">🧗 Adventure</button>
+                <button type="button" class="select-chip" data-value="bakeries-desserts">🧁 Bakeries & Desserts</button>
+                <button type="button" class="select-chip" data-value="music">🎵 Music</button>
+                <button type="button" class="select-chip" data-value="movies-entertainment">🎬 Movies & Entertainment</button>
+                <button type="button" class="select-chip" data-value="photography">📸 Photography</button>
+                <button type="button" class="select-chip" data-value="religious-places">🛕 Religious Places</button>
+                <button type="button" class="select-chip" data-value="family-activities">👨‍👩‍👧 Family Activities</button>
+                <button type="button" class="select-chip" data-value="amusement-parks">🎢 Amusement Parks</button>
+                <button type="button" class="select-chip" data-value="wellness-relaxation">🧘 Wellness & Relaxation</button>
+                <button type="button" class="select-chip" data-value="bookstores">📚 Bookstores</button>
+                <button type="button" class="select-chip" data-value="libraries">📖 Libraries</button>
+                <button type="button" class="select-chip" data-value="theatre-performing-arts">🎭 Theatre & Performing Arts</button>
+              </div>
+            </div>
+
+            <!-- Food Preferences (Section 13) -->
+            <div class="food-preferences-card" style="grid-column: 1 / -1;">
+              <div class="food-preferences-header">
+                <span>🍽️</span>
+                <span>Regional Food & Dining Preferences</span>
+              </div>
+              <div class="food-subfields-stack">
+                <div class="form-group">
+                  <label for="foodType" class="form-label">Dietary Preference</label>
+                  <select id="foodType" class="form-select">
+                    <option value="no-preference" selected>No Preference (Authentic Local)</option>
+                    <option value="vegetarian">Vegetarian</option>
+                    <option value="non-vegetarian">Non-Vegetarian</option>
+                    <option value="vegan">Vegan</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="cuisinePreferences" class="form-label">Cuisines / Specialties</label>
+                  <div class="tag-picker" id="cuisineTagPicker" data-field="cuisine">
+                    <div class="tag-picker-box">
+                      <div class="tag-picker-tags" id="cuisineTags"></div>
+                      <input type="text" id="cuisinePreferences" class="tag-picker-input" placeholder="e.g. Local Street Food, Mughlai, Punjabi..." autocomplete="off">
+                      <button type="button" class="tag-picker-toggle" aria-label="Toggle cuisine list">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                    </div>
+                    <div class="tag-picker-dropdown" id="cuisineDropdown" style="display:none;" role="listbox"></div>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="bakeryPreferences" class="form-label">Café & Bakery Preferences</label>
+                  <div class="tag-picker" id="bakeryTagPicker" data-field="bakery">
+                    <div class="tag-picker-box">
+                      <div class="tag-picker-tags" id="bakeryTags"></div>
+                      <input type="text" id="bakeryPreferences" class="tag-picker-input" placeholder="e.g. Specialty Coffee, Pastries, Sweets..." autocomplete="off">
+                      <button type="button" class="tag-picker-toggle" aria-label="Toggle bakery list">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                      </button>
+                    </div>
+                    <div class="tag-picker-dropdown" id="bakeryDropdown" style="display:none;" role="listbox"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pace & Transit -->
+            <div class="form-group">
+              <label for="itineraryPace" class="form-label">Travel Pace</label>
+              <select id="itineraryPace" class="form-select">
+                <option value="relaxed">Relaxed & Leisurely</option>
+                <option value="moderate" selected>Moderate & Balanced</option>
+                <option value="packed">Fast-Paced & Packed</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="itineraryLocalTransport" class="form-label">Local Transportation Mode</label>
+              <select id="itineraryLocalTransport" class="form-select">
+                <option value="public" selected>Public Transit & Walking</option>
+                <option value="walking">Walking Only</option>
+                <option value="driving">Taxi / Auto / E-Rickshaw</option>
+              </select>
+            </div>
+
+            <div style="grid-column: 1 / -1; margin-top: 10px; display:flex; justify-content:space-between; gap:12px;">
+              <button type="button" class="btn btn-secondary" id="btnBackToHotels">
+                <span>&larr; Back to Hotels</span>
+              </button>
+              <button type="submit" class="btn btn-primary" id="btnGenerateItinerary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Generate Door-to-Door Itinerary</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- STEP 5: Results Display Container (Sections 15, 16, 23) -->
+      <div id="itineraryResults" class="itinerary-result-container">
+        <div class="empty-state">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <h3>Ready to plan your door-to-door trip</h3>
+          <p>Enter your origin, destination, and travel dates above to search live flights, trains, hotels, and create a tailored schedule.</p>
+        </div>
+      </div>
+      <div class="rate-service-card" data-rate-service="Itinerary Planner"></div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer" role="contentinfo">
+      <div class="footer-inner">
+        <div>
+          <strong>Smart Local Guide</strong> — Door-to-Door Trip Planner
+          <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:2px;">Built with HTML5, CSS3, Vanilla JS & FastAPI.</p>
+        </div>
+        <ul class="footer-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="places.html">Places</a></li>
+          <li><a href="cafes.html">Cafés</a></li>
+          <li><a href="history.html">History</a></li>
+          <li><a href="reviews.html">Reviews</a></li>
+        </ul>
+      </div>
+    </footer>
+  </div>
+
+  <script src="../js/config.js"></script>
+  <script type="module" src="../js/app.js"></script>
+  <script type="module" src="../js/pages/itinerary.js"></script>
+</body>
+</html>

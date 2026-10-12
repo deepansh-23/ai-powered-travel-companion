@@ -1,0 +1,173 @@
+/* ==========================================================================
+   SMART LOCAL GUIDE - CSS DESIGN TOKENS & THEME VARIABLES
+   Section 5 & Section 21 of specifications
+   ========================================================================== */
+
+:root {
+  /* Default: Warm Aesthetic Theme (Section 5.1 & 5.3) */
+  --color-primary: #0F766E;
+  --color-primary-hover: #0B5F59;
+  --color-primary-light: #CCFBF1;
+  --color-primary-rgb: 15, 118, 110;
+
+  --color-secondary: #F4E7D3;
+  --color-secondary-dark: #E8D2B3;
+
+  --color-accent: #E76F51;
+  --color-accent-hover: #D85D42;
+  --color-accent-light: #FDE3DC;
+  --color-accent-rgb: 231, 111, 81;
+
+  --color-background: #FAF9F6;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #F5F7F6;
+
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #4B5563;
+  --color-text-muted: #6B7280;
+  --color-text-inverse: #FFFFFF;
+
+  --color-border: #E5E7EB;
+  --color-border-strong: #D1D5DB;
+
+  /* Status Colors */
+  --color-success: #15803D;
+  --color-success-light: #DCFCE7;
+  --color-warning: #D97706;
+  --color-warning-light: #FEF3C7;
+  --color-danger: #DC2626;
+  --color-danger-light: #FEE2E2;
+  --color-info: #2563EB;
+  --color-info-light: #DBEAFE;
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', var(--font-family);
+
+  /* Radius Tokens */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.10);
+  --shadow-focus: 0 0 0 3px rgba(15, 118, 110, 0.25);
+
+  /* Transitions */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Map settings */
+  --map-height-desktop: 380px;
+  --map-height-mobile: 280px;
+  --map-marker-color: var(--color-primary);
+  --map-center-color: var(--color-accent);
+}
+
+/* ==========================================================================
+   THEME VARIATIONS (Section 5.3)
+   ========================================================================== */
+
+/* Rose Gold Theme */
+[data-theme="rose-gold"] {
+  --color-primary: #9F5F68;
+  --color-primary-hover: #834750;
+  --color-primary-light: #FBEBEF;
+  --color-primary-rgb: 159, 95, 104;
+
+  --color-accent: #D89A9E;
+  --color-accent-hover: #C58387;
+  --color-accent-light: #FDF2F3;
+  --color-accent-rgb: 216, 154, 158;
+
+  --color-background: #FFF9F8;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #FBF4F3;
+  --color-border: #F0E1E3;
+  --color-border-strong: #DEC6CA;
+  --shadow-focus: 0 0 0 3px rgba(159, 95, 104, 0.25);
+}
+
+/* Sage Green Theme */
+[data-theme="sage-green"] {
+  --color-primary: #587A63;
+  --color-primary-hover: #46624F;
+  --color-primary-light: #EBF0EC;
+  --color-primary-rgb: 88, 122, 99;
+
+  --color-accent: #A3B18A;
+  --color-accent-hover: #8F9E77;
+  --color-accent-light: #F2F5ED;
+  --color-accent-rgb: 163, 177, 138;
+
+  --color-background: #F7F8F3;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #F1F3EB;
+  --color-border: #E2E6D8;
+  --color-border-strong: #CAD0BD;
+  --shadow-focus: 0 0 0 3px rgba(88, 122, 99, 0.25);
+}
+
+/* Classic Light Theme */
+[data-theme="classic-light"] {
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-light: #EFF6FF;
+  --color-primary-rgb: 37, 99, 235;
+
+  --color-accent: #F59E0B;
+  --color-accent-hover: #D97706;
+  --color-accent-light: #FEF3C7;
+  --color-accent-rgb: 245, 158, 11;
+
+  --color-background: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #F1F5F9;
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/* Dedicated Dark Theme (Section 5.2) */
+[data-theme="dark"] {
+  --color-background: #111827;
+  --color-surface: #1F2937;
+  --color-surface-soft: #273449;
+  --color-border: #374151;
+  --color-border-strong: #4B5563;
+
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #D1D5DB;
+  --color-text-muted: #9CA3AF;
+  --color-text-inverse: #111827;
+
+  --color-primary: #2DD4BF;
+  --color-primary-hover: #14B8A6;
+  --color-primary-light: rgba(45, 212, 191, 0.15);
+  --color-primary-rgb: 45, 212, 191;
+
+  --color-accent: #FB8B6B;
+  --color-accent-hover: #E76F51;
+  --color-accent-light: rgba(251, 139, 107, 0.18);
+  --color-accent-rgb: 251, 139, 107;
+
+  --color-secondary: #273449;
+  --color-secondary-dark: #1F2937;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --shadow-focus: 0 0 0 3px rgba(45, 212, 191, 0.35);
+}

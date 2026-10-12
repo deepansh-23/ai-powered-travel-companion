@@ -1,0 +1,370 @@
+{
+  "cafes": [
+    {
+      "id": "cafe-del-001",
+      "name": "Blue Tokai Coffee Roasters, Khan Market",
+      "category": "cafe",
+      "description": "A specialty coffee roaster's flagship Khan Market outlet with an airy courtyard seating area, single-origin pour-overs and reliable Wi-Fi for laptop-friendly work sessions.",
+      "address": "50-B, Khan Market, New Delhi, Delhi 110003",
+      "latitude": 28.5985,
+      "longitude": 77.2276,
+      "rating": 4.5,
+      "rating_count": 3100,
+      "rating_source": "Zomato",
+      "website": "https://bluetokaicoffee.com",
+      "phone": "+91 98 1180 4040",
+      "amenities": [
+        "wifi",
+        "charging",
+        "good_coffee",
+        "outdoor_seating"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-002",
+      "name": "Third Wave Coffee, Connaught Place",
+      "category": "cafe",
+      "description": "A bright, modern chain outlet on Connaught Place's inner circle with communal tables, fast Wi-Fi and plenty of power outlets, popular with students and remote workers alike.",
+      "address": "N-Block, Connaught Place, New Delhi, Delhi 110001",
+      "latitude": 28.6323,
+      "longitude": 77.2189,
+      "rating": 4.3,
+      "rating_count": 2400,
+      "rating_source": "Google Reviews",
+      "website": "https://thirdwavecoffee.in",
+      "phone": null,
+      "amenities": [
+        "wifi",
+        "charging",
+        "good_seating",
+        "outdoor_seating",
+        "long_hours"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-003",
+      "name": "Kunzum Travel Café",
+      "category": "cafe",
+      "description": "A pay-as-you-wish travel-themed café in Hauz Khas Village lined with books and maps, hosting regular traveller meetups; a quiet, laid-back spot to read or work between events.",
+      "address": "T-49, Hauz Khas Village, New Delhi, Delhi 110016",
+      "latitude": 28.5538,
+      "longitude": 77.1948,
+      "rating": 4.4,
+      "rating_count": 1800,
+      "rating_source": "TripAdvisor",
+      "website": "https://kunzum.com",
+      "phone": "+91 98 1112 3667",
+      "amenities": [
+        "wifi",
+        "quiet",
+        "good_seating"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-004",
+      "name": "Café Turtle, Khan Market",
+      "category": "cafe",
+      "description": "A cosy bookstore café above Full Circle Bookstore, serving quiche and coffee among the shelves; a favourite quiet corner for reading and light work away from market noise.",
+      "address": "Khan Market, New Delhi, Delhi 110003",
+      "latitude": 28.5988,
+      "longitude": 77.227,
+      "rating": 4.4,
+      "rating_count": 1500,
+      "rating_source": "Zomato",
+      "website": null,
+      "phone": "+91 11 2465 5641",
+      "amenities": [
+        "quiet",
+        "good_seating",
+        "desserts"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-005",
+      "name": "Perch Wine & Coffee Bar",
+      "category": "cafe",
+      "description": "A pastel-toned all-day café-bar in Khan Market with a dedicated coffee and pastry counter by morning, popular for its calm upstairs seating away from the main crowd.",
+      "address": "6, Middle Ln, Khan Market, New Delhi, Delhi 110003",
+      "latitude": 28.599,
+      "longitude": 77.2284,
+      "rating": 4.3,
+      "rating_count": 2900,
+      "rating_source": "Zomato",
+      "website": "https://perch.co.in",
+      "phone": "+91 11 4175 3374",
+      "amenities": [
+        "wifi",
+        "good_coffee",
+        "good_seating"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-006",
+      "name": "SodaBottleOpenerWala, Khan Market",
+      "category": "cafe",
+      "description": "A Parsi café-bar chain outlet serving berry pulao and bun maska in a nostalgic Bombay-cafe setting, with a relaxed pace that suits laptop work during off-peak hours.",
+      "address": "Khan Market, New Delhi, Delhi 110003",
+      "latitude": 28.5978,
+      "longitude": 77.2273,
+      "rating": 4.2,
+      "rating_count": 5200,
+      "rating_source": "Zomato",
+      "website": "https://sodabottleopenerwala.in",
+      "phone": "+91 11 4175 0303",
+      "amenities": [
+        "wifi",
+        "good_seating",
+        "long_hours"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-007",
+      "name": "Big Chill Café, Khan Market",
+      "category": "cafe",
+      "description": "A long-running Italian-leaning café known for its indulgent desserts and film-poster-covered walls; seating is snug but the vibe stays relaxed through the afternoon.",
+      "address": "68-A, Khan Market, New Delhi, Delhi 110003",
+      "latitude": 28.5981,
+      "longitude": 77.2281,
+      "rating": 4.3,
+      "rating_count": 6400,
+      "rating_source": "Zomato",
+      "website": null,
+      "phone": "+91 11 2465 0721",
+      "amenities": [
+        "desserts",
+        "good_seating"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-008",
+      "name": "AntiSOCIAL, Hauz Khas Village",
+      "category": "cafe",
+      "description": "A daytime café that turns into a live-music basement bar by night, with a rooftop terrace overlooking Hauz Khas lake; mornings and early afternoons stay quiet enough for focused work.",
+      "address": "Hauz Khas Village, New Delhi, Delhi 110016",
+      "latitude": 28.5533,
+      "longitude": 77.1958,
+      "rating": 4.2,
+      "rating_count": 7100,
+      "rating_source": "Zomato",
+      "website": null,
+      "phone": "+91 11 4666 3120",
+      "amenities": [
+        "wifi",
+        "outdoor_seating",
+        "good_coffee"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-009",
+      "name": "Chaayos, Connaught Place",
+      "category": "cafe",
+      "description": "A popular tea-and-snacks chain outlet on the CP inner circle with customizable kulhad chai, quick Wi-Fi and plentiful seating that stays reliably available through the day.",
+      "address": "A-Block, Connaught Place, New Delhi, Delhi 110001",
+      "latitude": 28.6308,
+      "longitude": 77.2198,
+      "rating": 4.1,
+      "rating_count": 3900,
+      "rating_source": "Zomato",
+      "website": "https://chaayos.com",
+      "phone": null,
+      "amenities": [
+        "wifi",
+        "charging",
+        "budget_friendly"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-010",
+      "name": "Starbucks Reserve, Connaught Place",
+      "category": "cafe",
+      "description": "A flagship Starbucks Reserve outlet with premium single-origin brews and multiple floors of seating, including quieter upper-level tables suited to longer work sessions.",
+      "address": "Radial Rd 1, Connaught Place, New Delhi, Delhi 110001",
+      "latitude": 28.6332,
+      "longitude": 77.2181,
+      "rating": 4.3,
+      "rating_count": 4500,
+      "rating_source": "Google Reviews",
+      "website": "https://starbucksreserve.in",
+      "phone": null,
+      "amenities": [
+        "wifi",
+        "charging",
+        "good_coffee",
+        "ac",
+        "long_hours",
+        "quiet"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-011",
+      "name": "Depot48, Hauz Khas",
+      "category": "cafe",
+      "description": "A minimalist, industrial-styled café near Hauz Khas with strong espresso-based drinks and communal wooden tables, favoured by nearby design-studio workers for laptop sessions.",
+      "address": "Adhchini, Hauz Khas, New Delhi, Delhi 110017",
+      "latitude": 28.5453,
+      "longitude": 77.1985,
+      "rating": 4.4,
+      "rating_count": 1200,
+      "rating_source": "Zomato",
+      "website": null,
+      "phone": "+91 98 1055 9048",
+      "amenities": [
+        "wifi",
+        "good_coffee",
+        "quiet"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-012",
+      "name": "Café Delhi Heights, Vasant Vihar",
+      "category": "cafe",
+      "description": "A spacious, contemporary café-restaurant in Priya Complex with generous booth seating and steady Wi-Fi, popular with South Delhi students during weekday afternoons.",
+      "address": "Priya Complex, Vasant Vihar, New Delhi, Delhi 110057",
+      "latitude": 28.5605,
+      "longitude": 77.159,
+      "rating": 4.2,
+      "rating_count": 8600,
+      "rating_source": "Zomato",
+      "website": "https://cafedelhiheights.com",
+      "phone": "+91 11 4602 0202",
+      "amenities": [
+        "wifi",
+        "charging",
+        "good_seating",
+        "ac"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-013",
+      "name": "Coffee By Di Bella, GK II",
+      "category": "cafe",
+      "description": "A relaxed neighbourhood café in Greater Kailash II known for Australian-style brunch and consistent coffee, with a small quiet corner good for solo work in the mornings.",
+      "address": "M-Block Market, GK II, New Delhi, Delhi 110048",
+      "latitude": 28.5355,
+      "longitude": 77.242,
+      "rating": 4.5,
+      "rating_count": 2100,
+      "rating_source": "Zomato",
+      "website": null,
+      "phone": "+91 11 2921 5678",
+      "amenities": [
+        "quiet",
+        "good_coffee",
+        "good_seating"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-014",
+      "name": "Blue Tokai Coffee Roasters, Lodhi Colony",
+      "category": "cafe",
+      "description": "A converted-market-stall roastery café in Lodhi Colony's Meherchand Market, with outdoor bench seating and single-origin filter coffee brewed to order.",
+      "address": "Meherchand Market, Lodhi Colony, New Delhi, Delhi 110003",
+      "latitude": 28.604,
+      "longitude": 77.2274,
+      "rating": 4.6,
+      "rating_count": 1700,
+      "rating_source": "Google Reviews",
+      "website": "https://bluetokaicoffee.com",
+      "phone": "+91 98 1180 4041",
+      "amenities": [
+        "wifi",
+        "good_coffee",
+        "outdoor_seating",
+        "budget_friendly"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-015",
+      "name": "The Yellow Brick Road Café, Lodhi Colony",
+      "category": "cafe",
+      "description": "A plant-filled all-day café in Meherchand Market with soft lighting and slow service, comfortable for extended reading or writing sessions away from CP's crowds.",
+      "address": "Meherchand Market, Lodhi Colony, New Delhi, Delhi 110003",
+      "latitude": 28.5865,
+      "longitude": 77.228,
+      "rating": 4.3,
+      "rating_count": 980,
+      "rating_source": "Zomato",
+      "website": null,
+      "phone": null,
+      "amenities": [
+        "quiet",
+        "good_seating",
+        "wifi"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-016",
+      "name": "Diggin Café, GK I",
+      "category": "cafe",
+      "description": "A garden-style café tucked into a GK I bungalow with leafy outdoor seating, all-day breakfast and a calm daytime pace before the dinner crowd arrives.",
+      "address": "N-Block Market, GK I, New Delhi, Delhi 110048",
+      "latitude": 28.5535,
+      "longitude": 77.2373,
+      "rating": 4.4,
+      "rating_count": 3200,
+      "rating_source": "Zomato",
+      "website": "https://diggincafe.com",
+      "phone": "+91 11 2923 1010",
+      "amenities": [
+        "outdoor_seating",
+        "good_coffee",
+        "wifi"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    },
+    {
+      "id": "cafe-del-017",
+      "name": "Wenger's Deli & Verandah Café, Connaught Place",
+      "category": "cafe",
+      "description": "An iconic heritage bakery deli with shaded outdoor verandah seating on Connaught Place, serving freshly brewed artisan coffee, artisanal paninis, and classic pastries.",
+      "address": "A-Block, Radial Rd 3, Connaught Place, New Delhi, Delhi 110001",
+      "latitude": 28.6328,
+      "longitude": 77.2195,
+      "rating": 4.6,
+      "rating_count": 4800,
+      "rating_source": "Zomato",
+      "website": "https://wengersdeli.com",
+      "phone": "+91 11 2332 4403",
+      "amenities": [
+        "wifi",
+        "outdoor_seating",
+        "good_coffee",
+        "desserts",
+        "budget_friendly"
+      ],
+      "description_source": "provider",
+      "source": "sample-data"
+    }
+  ]
+}

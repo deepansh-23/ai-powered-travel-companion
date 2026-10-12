@@ -1,0 +1,162 @@
+/* ==========================================================================
+   SMART LOCAL GUIDE - RESPONSIVE STYLES
+   Section 50.9 & Section 19
+   ========================================================================== */
+
+/* Tablet Breakpoint (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+  }
+
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .map-container {
+    height: 340px;
+  }
+}
+
+/* Mobile Breakpoint (max-width: 768px) */
+@media (max-width: 768px) {
+  /* Navbar */
+  .nav-links {
+    display: none;
+  }
+
+  .mobile-nav-toggle {
+    display: inline-flex;
+  }
+
+  /* Single Column Cards */
+  .cards-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+
+  /* Map sizing (Section 50.1 & 50.9) */
+  .map-container {
+    height: var(--map-height-mobile);
+    border-radius: var(--radius-lg);
+  }
+
+  .features-grid, .steps-grid, .area-sections-grid, .pro-con-grid, .itinerary-grid-form {
+    grid-template-columns: 1fr;
+  }
+
+  /* Search & Controls */
+  .search-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input-group {
+    width: 100%;
+  }
+
+  .location-btn-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .location-btn-group .btn {
+    flex: 1;
+  }
+
+  .btn {
+    min-height: 44px; /* Touch target minimum */
+  }
+
+  /* Filter chips scroll smoothly inside their container without page overflow */
+  .filter-chips-container {
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* History card stack */
+  .history-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .history-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 10px;
+    border-top: 1px solid var(--color-border);
+    padding-top: 10px;
+  }
+
+  .hero-title {
+    font-size: 2.2rem;
+  }
+
+  .time-segment {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .time-marker {
+    min-width: unset;
+  }
+}
+
+/* Small mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  .main-content {
+    padding: var(--space-lg) var(--space-sm);
+  }
+
+  .map-container {
+    height: 260px;
+  }
+
+  .route-summary-panel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .route-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ==========================================================================
+   Larger text needs the compact (menu) navigation a little earlier,
+   so labels never wrap onto two lines.
+   ========================================================================== */
+.nav-link, .nav-dropdown-btn, .brand-link { white-space: nowrap; }
+
+@media (max-width: 1060px) {
+  .nav-links { display: none; }
+  .mobile-nav-toggle { display: inline-flex; }
+}
+
+/* ==========================================================================
+   Phone-width fixes for the larger text (nothing may scroll sideways)
+   ========================================================================== */
+.app-wrapper, .main-content { min-width: 0; }
+.planner-steps-bar { max-width: 100%; min-width: 0; }
+.history-filter-bar { flex-wrap: wrap; }
+.location-btn-group { flex-wrap: wrap; }
+.navbar-inner, .navbar-actions { min-width: 0; }
+
+@media (max-width: 480px) {
+  .brand-link { font-size: 1rem; gap: 6px; }
+  .navbar-actions { gap: 8px; }
+  .theme-dropdown { max-width: 118px; font-size: 0.75rem; padding: 6px 6px; }
+  .location-btn-group .btn { flex: 1 1 45%; }
+}
+
+/* Grid children may shrink below their content width (prevents sideways scroll) */
+.itinerary-grid-form > * { min-width: 0; }
+@media (max-width: 768px) {
+  .itinerary-grid-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .btn { white-space: normal; text-align: center; max-width: 100%; }
+}

@@ -1,0 +1,60 @@
+{
+  "locations": [
+    {
+      "name": "Manchester",
+      "aliases": ["manchester", "manchester uk", "manchester city centre", "greater manchester"],
+      "label": "Manchester, United Kingdom",
+      "latitude": 53.4808,
+      "longitude": -2.2426,
+      "country": "United Kingdom"
+    },
+    {
+      "name": "London",
+      "aliases": ["london", "london uk", "central london", "westminster"],
+      "label": "London, United Kingdom",
+      "latitude": 51.5074,
+      "longitude": -0.1278,
+      "country": "United Kingdom"
+    },
+    {
+      "name": "Edinburgh",
+      "aliases": ["edinburgh", "edinburgh scotland", "edinburgh city centre"],
+      "label": "Edinburgh, Scotland",
+      "latitude": 55.9533,
+      "longitude": -3.1883,
+      "country": "United Kingdom"
+    },
+    {
+      "name": "Delhi",
+      "aliases": ["delhi", "new delhi", "connaught place", "connaught place, delhi"],
+      "label": "Connaught Place, New Delhi, India",
+      "latitude": 28.6315,
+      "longitude": 77.2167,
+      "country": "India"
+    },
+    {
+      "name": "New York",
+      "aliases": ["new york", "nyc", "manhattan", "brooklyn"],
+      "label": "Manhattan, New York, USA",
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "country": "United States"
+    },
+    {
+      "name": "Paris",
+      "aliases": ["paris", "paris france", "le marais"],
+      "label": "Paris, France",
+      "latitude": 48.8566,
+      "longitude": 2.3522,
+      "country": "France"
+    },
+    {
+      "name": "Tokyo",
+      "aliases": ["tokyo", "tokyo japan", "shibuya", "shinjuku"],
+      "label": "Shibuya, Tokyo, Japan",
+      "latitude": 35.6580,
+      "longitude": 139.7016,
+      "country": "Japan"
+    }
+  ]
+}

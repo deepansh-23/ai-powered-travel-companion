@@ -1,0 +1,264 @@
+{
+  "templates": {
+    "default": {
+      "title": "Culture & Heritage Exploration in Manchester",
+      "destination": "Manchester",
+      "duration_days": 3,
+      "estimated_budget_total": "£280 - £350 per person",
+      "currency": "GBP",
+      "pace": "Moderate",
+      "trip_overview": "A rich cultural journey through Manchester's industrial transformation, historic libraries, world-class art collections, and vibrant culinary neighborhoods.",
+      "days": [
+        {
+          "day_number": 1,
+          "theme": "Historic Heart & World-Class Libraries",
+          "estimated_day_cost": "£85 - £110",
+          "morning": {
+            "time_window": "09:00 - 12:30",
+            "title": "Gothic Marvels on Deansgate",
+            "description": "Start at The John Rylands Library on Deansgate. Marvel at the cathedral-like Historic Reading Room and rare illuminated manuscripts.",
+            "places": [
+              {
+                "name": "The John Rylands Library",
+                "category": "attraction",
+                "address": "150 Deansgate, Manchester M3 3EH",
+                "duration": "1.5 hours",
+                "admission": "Free entry",
+                "verified": true,
+                "website": "https://www.library.manchester.ac.uk/rylands/"
+              }
+            ],
+            "transport_note": "Easily walkable from St Peter's Square Metrolink tram stop (6 min walk)."
+          },
+          "food_stop_lunch": {
+            "name": "Dishoom Manchester",
+            "cuisine": "Bombay Comfort Food & Chai",
+            "address": "32 Bridge St, Manchester M3 3BT",
+            "price_level": "££",
+            "recommendation": "Famous house black daal, chicken ruby, and freshly baked garlic naan.",
+            "website": "https://www.dishoom.com/manchester/"
+          },
+          "afternoon": {
+            "time_window": "14:00 - 17:30",
+            "title": "Civic Grandeur & British Fine Art",
+            "description": "Stroll down Mosley Street to Manchester Art Gallery. Explore Pre-Raphaelite masterpieces and rotating contemporary craft galleries.",
+            "places": [
+              {
+                "name": "Manchester Art Gallery",
+                "category": "museum",
+                "address": "Mosley St, Manchester M2 3JL",
+                "duration": "2 hours",
+                "admission": "Free admission (donations welcome)",
+                "verified": true,
+                "website": "https://manchesterartgallery.org"
+              },
+              {
+                "name": "St Peter's Square & Central Library",
+                "category": "attraction",
+                "address": "St Peter's Square, Manchester M2 5PD",
+                "duration": "1 hour",
+                "admission": "Free public access",
+                "verified": true,
+                "website": "https://www.manchester.gov.uk/centrallibrary"
+              }
+            ],
+            "transport_note": "Walk 5 minutes east across Albert Square."
+          },
+          "food_stop_dinner": {
+            "name": "Hawksmoor Manchester",
+            "cuisine": "British Steakhouse & Seafood",
+            "address": "184-186 Deansgate, Manchester M3 3WB",
+            "price_level": "£££",
+            "recommendation": "Charcoal-grilled heritage beef and sticky toffee pudding in a restored Victorian courthouse.",
+            "website": "https://thehawksmoor.com/locations/manchester/"
+          },
+          "evening": {
+            "time_window": "19:30 - 22:00",
+            "title": "Sunset Skyline Views",
+            "description": "Head up to Cloud 23 on the 23rd floor of Beetham Tower for evening twilight panoramas across the city skyline.",
+            "places": [
+              {
+                "name": "Cloud 23 View Lounge",
+                "category": "view",
+                "address": "303 Deansgate, Manchester M3 4LQ",
+                "duration": "1.5 hours",
+                "admission": "Table reservation recommended",
+                "verified": true,
+                "website": "https://www.cloud23bar.com"
+              }
+            ],
+            "transport_note": "10-minute walk south down Deansgate."
+          }
+        },
+        {
+          "day_number": 2,
+          "theme": "Industrial Heritage & Waterside Canals",
+          "estimated_day_cost": "£90 - £120",
+          "morning": {
+            "time_window": "09:30 - 13:00",
+            "title": "Cradle of the Industrial Revolution",
+            "description": "Visit Castlefield Urban Heritage Park and the Science and Industry Museum on the site of the world's oldest surviving passenger railway terminus.",
+            "places": [
+              {
+                "name": "Science and Industry Museum",
+                "category": "museum",
+                "address": "Liverpool Rd, Manchester M3 4FP",
+                "duration": "2.5 hours",
+                "admission": "Free (special exhibitions may require ticket)",
+                "verified": true,
+                "website": "https://www.scienceandindustrymuseum.org.uk"
+              },
+              {
+                "name": "Castlefield Viaduct Sky Park",
+                "category": "park",
+                "address": "Catalan Way, Manchester M3 4LZ",
+                "duration": "45 mins",
+                "admission": "Free booked entry via National Trust",
+                "verified": true,
+                "website": "https://www.nationaltrust.org.uk/castlefield-viaduct"
+              }
+            ],
+            "transport_note": "Deansgate-Castlefield Metrolink stop is right at the viaduct entrance."
+          },
+          "food_stop_lunch": {
+            "name": "The Wharf Castlefield",
+            "cuisine": "Waterside British Pub",
+            "address": "6 Slate Wharf, Manchester M15 4ST",
+            "price_level": "££",
+            "recommendation": "Cask ales, seasonal pies, and outdoor canal-basin terrace seating.",
+            "website": null
+          },
+          "afternoon": {
+            "time_window": "14:30 - 17:30",
+            "title": "Contemporary Arts & Modern Architecture",
+            "description": "Wander along the Irwell riverfront to the striking Aviva Studios (Factory International), Manchester's new landmark cultural center.",
+            "places": [
+              {
+                "name": "Aviva Studios (Factory International)",
+                "category": "attraction",
+                "address": "Water St, Manchester M3 4JQ",
+                "duration": "2 hours",
+                "admission": "Building free to enter; ticketed exhibitions",
+                "verified": true,
+                "website": "https://factoryinternational.org"
+              }
+            ],
+            "transport_note": "12-minute scenic waterside stroll along Liverpool Road."
+          },
+          "food_stop_dinner": {
+            "name": "Mackie Mayor",
+            "cuisine": "Artisan Food Hall",
+            "address": "Eagle St, Manchester M4 5BU",
+            "price_level": "££",
+            "recommendation": "Wood-fired sourdough pizza, ramen bowls, craft beers, and natural wine.",
+            "website": "https://www.mackiemayor.co.uk"
+          },
+          "evening": {
+            "time_window": "19:30 - 22:30",
+            "title": "Theatre in the Round",
+            "description": "Experience an evening theatrical performance inside the Royal Exchange Theatre's futuristic glass module.",
+            "places": [
+              {
+                "name": "Royal Exchange Theatre",
+                "category": "attraction",
+                "address": "St Ann's Square, Manchester M2 7PE",
+                "duration": "2.5 hours",
+                "admission": "Tickets from £15",
+                "verified": true,
+                "website": "https://www.royalexchange.co.uk"
+              }
+            ],
+            "transport_note": "5-minute walk from Exchange Square Metrolink."
+          }
+        },
+        {
+          "day_number": 3,
+          "theme": "Creative Quarters & Botanical Sanctuaries",
+          "estimated_day_cost": "£75 - £100",
+          "morning": {
+            "time_window": "10:00 - 13:00",
+            "title": "Northern Quarter Bohemian Independent Gems",
+            "description": "Explore the maze of street art, vinyl shops, and artist workshops in the Northern Quarter. Browse independent creators at Afflecks and Manchester Craft and Design Centre.",
+            "places": [
+              {
+                "name": "Afflecks",
+                "category": "shopping",
+                "address": "52 Church St, Manchester M4 1PW",
+                "duration": "1.5 hours",
+                "admission": "Free entry",
+                "verified": true,
+                "website": "https://www.afflecks.com"
+              },
+              {
+                "name": "Manchester Craft and Design Centre",
+                "category": "shopping",
+                "address": "17 Oak St, Manchester M4 5JD",
+                "duration": "1 hour",
+                "admission": "Free entry",
+                "verified": true,
+                "website": "https://www.craftanddesign.com"
+              }
+            ],
+            "transport_note": "Easily walkable across the Northern Quarter grid."
+          },
+          "food_stop_lunch": {
+            "name": "Federal Cafe Bar",
+            "cuisine": "Artisan Antipodean Brunch",
+            "address": "9 Nicholas Croft, Northern Quarter, Manchester M4 1EY",
+            "price_level": "££",
+            "recommendation": "Corn fritters with poached eggs, acai bowls, and expertly poured flat whites.",
+            "website": "https://federalcafe.co.uk"
+          },
+          "afternoon": {
+            "time_window": "14:00 - 17:00",
+            "title": "Parkland Arts & Tree-Lined Galleries",
+            "description": "Take the Oxford Road corridor south to The Whitworth. Stroll through Whitworth Park and admire British watercolours in the glass park pavilion.",
+            "places": [
+              {
+                "name": "The Whitworth",
+                "category": "museum",
+                "address": "Oxford Rd, Manchester M15 6ER",
+                "duration": "2 hours",
+                "admission": "Free admission",
+                "verified": true,
+                "website": "https://www.whitworth.manchester.ac.uk"
+              }
+            ],
+            "transport_note": "Bus 41, 42 or 43 from Piccadilly Gardens (12 minutes)."
+          },
+          "food_stop_dinner": {
+            "name": "Rudy's Neapolitan Pizza (Ancoats)",
+            "cuisine": "Authentic Neapolitan Sourdough Pizza",
+            "address": "9 Cotton St, Ancoats, Manchester M4 5BF",
+            "price_level": "££",
+            "recommendation": "Double-fermented dough pizza with San Marzano tomatoes and fior di latte mozzarella.",
+            "website": null
+          },
+          "evening": {
+            "time_window": "19:00 - 21:30",
+            "title": "Canal Basin Sunset Walk",
+            "description": "Unwind with an evening walk around New Islington Marina and Mayfield Park along the restored River Medlock.",
+            "places": [
+              {
+                "name": "Mayfield Park",
+                "category": "park",
+                "address": "Baring St, Manchester M1 2PY",
+                "duration": "1 hour",
+                "admission": "Public open park",
+                "verified": true,
+                "website": "https://mayfieldmanchester.co.uk"
+              }
+            ],
+            "transport_note": "Walk 10 minutes west back towards Manchester Piccadilly station."
+          }
+        }
+      ],
+      "sources": [
+        "Manchester City Council Visitor Guide",
+        "Historic England Public Register",
+        "OpenStreetMap Contributors"
+      ],
+      "disclaimer": "Opening hours, admission prices, and transit schedules are approximate and subject to change. Always verify with official venue websites prior to your visit."
+    }
+  }
+}

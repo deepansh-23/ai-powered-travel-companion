@@ -1,0 +1,75 @@
+{
+  "areas": {
+    "manchester city centre": {
+      "area_name": "Manchester City Centre",
+      "region": "Greater Manchester, United Kingdom",
+      "character_summary": "A dynamic urban blend of Victorian red-brick architecture, industrial heritage canals, world-class cultural institutions, and thriving independent culinary districts. Highly walkable and compact with comprehensive tram connectivity.",
+      "quick_facts": {
+        "walkability": "Excellent (95/100)",
+        "transit_connectivity": "Very High (Metrolink, 3 rail stations)",
+        "vibe": "Energetic, cultural & historic",
+        "best_for": "Culture lovers, foodies, and business travellers",
+        "average_meal_cost": "£15 - £35"
+      },
+      "sections": {
+        "food": {
+          "title": "Dining & Street Food",
+          "summary": "From Michelin-starred dining in Spinningfields to historic communal food halls like Mackie Mayor in the Northern Quarter and street cuisine at Chinatown.",
+          "highlights": ["Chinatown culinary enclave", "Mackie Mayor food hall", "Spinningfields fine dining", "King Street bistros"]
+        },
+        "cafes": {
+          "title": "Specialty Cafés & Work Spots",
+          "summary": "One of the UK's most concentrated artisan coffee scenes, featuring bookshop cafés on Lever Street, Scandinavian work hubs, and roasteries in railway arches.",
+          "highlights": ["Chapter One Books", "Foundation Coffee House", "Takk Nordic Roasters", "Ezra & Gil"]
+        },
+        "shopping": {
+          "title": "Retail & Independent Boutiques",
+          "summary": "High-end luxury brands flank King Street and New Cathedral Street, while four-storey Afflecks and Manchester Craft and Design Centre champion independent artisans.",
+          "highlights": ["Afflecks 4-storey bazaar", "King Street luxury corridor", "Manchester Arndale", "Barton Arcade"]
+        },
+        "hospitals_pharmacies": {
+          "title": "Medical Care & Pharmacies",
+          "summary": "Primary 24/7 acute trauma care at Manchester Royal Infirmary (Oxford Rd) and Salford Royal Hospital. City Centre Urgent Treatment Centre on Market Street handles daytime minor injuries.",
+          "highlights": ["Manchester Royal Infirmary A&E (24/7)", "Cameolord 24-hr Pharmacy", "City Centre Urgent Care Centre"]
+        },
+        "atms": {
+          "title": "Banking & ATMs",
+          "summary": "Abundant 24/7 ATMs located throughout Piccadilly Gardens, St Ann's Square, Market Street, and all major train concourses. Contactless payments widely accepted everywhere.",
+          "highlights": ["Piccadilly Station concourse", "St Ann's Square banks", "Deansgate financial branches"]
+        },
+        "attractions": {
+          "title": "Historic & Cultural Landmarks",
+          "summary": "Magnificent Gothic architecture at The John Rylands Library, medieval Manchester Cathedral, Science and Industry Museum, and modern Aviva Studios.",
+          "highlights": ["The John Rylands Library", "Science & Industry Museum", "Manchester Art Gallery", "National Football Museum"]
+        },
+        "parks": {
+          "title": "Green Spaces & Canals",
+          "summary": "Peaceful canal basins at Castlefield Urban Heritage Park, the elevated Castlefield Viaduct Sky Park, and the new daylighted River Medlock meadows at Mayfield Park.",
+          "highlights": ["Castlefield Canals & Roman Fort", "Mayfield Park daylighted river", "Castlefield Viaduct Sky Park", "Parsonage Gardens"]
+        },
+        "transport": {
+          "title": "Public Transportation",
+          "summary": "Fully integrated Metrolink tram network with dense central zone stops (St Peter's Square, Piccadilly Gardens, Victoria). Three mainline rail stations (Piccadilly, Victoria, Oxford Road) and free city-centre bus loops.",
+          "highlights": ["Metrolink Tram Network", "Manchester Piccadilly Station", "Free City Centre Bus Route 1 & 2"]
+        }
+      },
+      "advantages": [
+        "Exceptionally walkable city core with flat pedestrian-friendly streets",
+        "Extensive free cultural attractions and national museums",
+        "Superb public transport connectivity linking directly to Manchester Airport (20 mins)",
+        "Thriving food and coffee culture spanning street food to fine dining"
+      ],
+      "limitations": [
+        "Weekend nightlife zones can be loud around Deansgate Locks and Northern Quarter",
+        "Frequent regional rain requires waterproof apparel",
+        "Vehicle traffic and parking restrictions make driving inconvenient in the core"
+      ],
+      "suitability": [
+        "Solo travellers and remote workers seeking vibrant work-friendly cafés",
+        "Couples and culture buffs interested in architecture, art, and theatre",
+        "Weekend city-breakers wanting great food and walkable attractions"
+      ],
+      "source": "Sample curated guide based on Manchester City Council public domain tourism data"
+    }
+  }
+}
