@@ -3,7 +3,7 @@
 
 from datetime import date
 from typing import List, Dict, Any
-from app.security import require_human
+from app.security import require_user
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.models.hotel import (
     HotelSearchRequest,
@@ -53,7 +53,7 @@ def validate_hotel_search(req: HotelSearchRequest):
         )
 
 
-@router.post("/search", response_model=HotelSearchResponse, dependencies=[Depends(require_human)])
+@router.post("/search", response_model=HotelSearchResponse, dependencies=[Depends(require_user)])
 async def search_hotels(req: HotelSearchRequest):
     """Search hotels for the specified destination and stay duration."""
     validate_hotel_search(req)
@@ -78,7 +78,7 @@ async def search_hotels(req: HotelSearchRequest):
         )
 
 
-@router.post("/details", response_model=Dict[str, Any], dependencies=[Depends(require_human)])
+@router.post("/details", response_model=Dict[str, Any], dependencies=[Depends(require_user)])
 async def get_hotel_details(req: HotelDetailsRequest):
     """Retrieve full booking-site price comparison on-demand for a selected hotel."""
     if not req.property_token or not req.property_token.strip():

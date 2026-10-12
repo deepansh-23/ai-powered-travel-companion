@@ -4,7 +4,7 @@ Validates source, destination, dates, and travelers strictly.
 
 from datetime import date
 from typing import Any, Dict, List, Optional
-from app.security import require_human
+from app.security import require_user
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from app.models.transport import TransportSearchRequest, TransportSearchResponse
@@ -77,7 +77,7 @@ def validate_transport_request(req: TransportSearchRequest):
         )
 
 
-@router.post("/search", response_model=TransportSearchResponse, dependencies=[Depends(require_human)])
+@router.post("/search", response_model=TransportSearchResponse, dependencies=[Depends(require_user)])
 async def search_transport(req: TransportSearchRequest):
     """Search outbound and return flights and trains with deterministic comparison."""
     validate_transport_request(req)
@@ -104,7 +104,7 @@ class FlightBookingRequest(BaseModel):
 _ALLOWED_BOOKING_PARAMS = {"departure_id", "arrival_id", "outbound_date", "adults", "currency"}
 
 
-@router.post("/flight-booking", dependencies=[Depends(require_human)])
+@router.post("/flight-booking", dependencies=[Depends(require_user)])
 async def flight_booking_options(req: FlightBookingRequest):
     """Return provider-supplied booking options for a selected flight (Section 11).
 

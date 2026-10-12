@@ -1,6 +1,8 @@
 """Smart Local Guide - FastAPI Main Application.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -20,13 +22,24 @@ from app.routes import (
     transport,
     hotel,
     captcha,
-    feedback
+    feedback,
+    auth,
+    sessions
 )
+from app.db import dispose_db, init_db
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await init_db()      # connect to PostgreSQL and create tables (never blocks startup on failure)
+    yield
+    await dispose_db()
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Full-stack AI-assisted local discovery platform, itinerary planner, and map explorer API."
+    description="Full-stack AI-assisted local discovery platform, itinerary planner, and map explorer API.",
+    lifespan=lifespan
 )
 
 # CORS Middleware setup
@@ -52,6 +65,8 @@ app.include_router(transport.router)
 app.include_router(hotel.router)
 app.include_router(captcha.router)
 app.include_router(feedback.router)
+app.include_router(auth.router)
+app.include_router(sessions.router)
 
 
 # Mount frontend directory for seamless local single-command running

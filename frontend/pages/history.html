@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="../css/pages.css">
   <link rel="stylesheet" href="../css/responsive.css">
 </head>
-<body>
+<body data-requires-login>
   <div class="app-wrapper">
     <!-- Navbar -->
     <header class="app-navbar" role="banner">
@@ -100,6 +100,12 @@
       </div>
 
       <!-- History List -->
+      <section class="saved-sessions-card" aria-labelledby="savedSessionsTitle">
+        <h2 id="savedSessionsTitle" style="font-size:1.2rem;margin-bottom:6px;">Saved sessions</h2>
+        <p class="text-muted" style="margin-bottom:8px;">Half-finished work you saved. Resume it exactly where you stopped.</p>
+        <div id="savedSessionsList"><p class="text-muted">Loading…</p></div>
+      </section>
+
       <div id="historyList" class="history-list" role="region" aria-label="List of history entries"></div>
     </main>
 

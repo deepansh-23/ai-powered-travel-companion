@@ -57,6 +57,23 @@ class Settings(BaseSettings):
     CAPTCHA_PROVIDER: str = "recaptcha"
     CAPTCHA_SESSION_HOURS: int = 12
 
+    # ------------------------------------------------------------------
+    # PostgreSQL (Aiven) for user accounts, sessions, history and reviews.
+    # Leave DB_HOST empty to run without accounts (public features still work).
+    DB_HOST: Optional[str] = None
+    DB_PORT: int = 5432
+    DB_NAME: Optional[str] = None
+    DB_USER: Optional[str] = None
+    DB_PASSWORD: Optional[str] = None
+    DB_SSL_CA: str = "ca.pem"          # Aiven CA certificate (relative to the project root)
+    DATABASE_URL: Optional[str] = None  # full SQLAlchemy URL override (used by tests)
+
+    # Login sessions
+    AUTH_COOKIE_NAME: str = "slg_session"
+    AUTH_SESSION_DAYS: int = 14
+    AUTH_MAX_FAILED_ATTEMPTS: int = 5
+    AUTH_LOCKOUT_MINUTES: int = 15
+
     # Legacy aliases kept for backward compatibility with old .env files;
     # they are ignored in production — only the canonical names above matter.
     AI_API_KEY: Optional[str] = None         # not used; kept so old .env files don't crash
@@ -78,6 +95,11 @@ class Settings(BaseSettings):
         "RAILRADAR_API_KEY",
         "RECAPTCHA_SITE_KEY",
         "RECAPTCHA_SECRET_KEY",
+        "DB_HOST",
+        "DB_NAME",
+        "DB_USER",
+        "DB_PASSWORD",
+        "DATABASE_URL",
         mode="before"
     )
     @classmethod
@@ -116,7 +138,8 @@ class Settings(BaseSettings):
         return v
 
     class Config:
-        env_file = ".env"
+        # Always the project-root .env, whatever folder the server is started from
+        env_file = str(Path(__file__).resolve().parent.parent.parent / ".env")
         env_file_encoding = "utf-8"
         extra = "ignore"
 

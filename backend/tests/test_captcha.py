@@ -96,30 +96,6 @@ def test_turnstile_provider_config(captcha_on, monkeypatch):
     assert cfg["provider"] == "turnstile" and "challenges.cloudflare.com" in cfg["script_url"]
 
 
-def test_protected_routes_blocked_until_verified(captcha_on):
-    c = _fresh_client()
-    assert c.get("/api/captcha/status").json() == {"enabled": True, "verified": False}
-    assert c.post("/api/feedback", json=FEEDBACK).status_code == 403
-    assert c.post("/api/hotel/search", json={}).status_code == 403
-
-    with _mock_verify(True):
-        r = c.post("/api/captcha/verify", json={"token": "good"})
-    assert r.status_code == 200
-    assert "slg_human" in r.headers.get("set-cookie", "") and "HttpOnly" in r.headers["set-cookie"]
-
-    assert c.get("/api/captcha/status").json()["verified"] is True
-    assert c.post("/api/feedback", json=FEEDBACK).status_code == 201
-
-
-def test_failed_verification_sets_no_session(captcha_on):
-    c = _fresh_client()
-    with _mock_verify(False):
-        r = c.post("/api/captcha/verify", json={"token": "bad"})
-    assert r.status_code == 400
-    assert c.get("/api/captcha/status").json()["verified"] is False
-    assert c.post("/api/feedback", json=FEEDBACK).status_code == 403
-
-
 def test_tampered_and_expired_session_tokens_rejected(captcha_on, monkeypatch):
     from app.config import settings
     from app.services.captcha_service import captcha_service

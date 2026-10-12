@@ -8,7 +8,8 @@
 
 import { api } from "../api.js";
 import { toast } from "./toast.js";
-import { escapeHtml } from "../utils/formatters.js";
+import { escapeHtml, formatDateTime } from "../utils/formatters.js";
+import { authManager } from "./auth.js";
 
 export const REVIEW_SERVICES = [
   "Overall Website",
@@ -82,6 +83,7 @@ export function renderStarPicker(container, initial = 5) {
 
 /** Saves one review for every selected service. Throws a readable Error on failure. */
 export async function submitReview({ rating, comment, services }) {
+  if (!authManager.isLoggedIn()) throw new Error("Please log in to post a review.");
   if (!services || services.length === 0) throw new Error("Please select at least one service to review.");
   if (!comment || comment.trim().length < 2) throw new Error("Please write a short comment.");
   const saved = await api.submitFeedbackMulti({ rating, comment: comment.trim(), services });
@@ -117,7 +119,11 @@ function buildPanel() {
       <h2>Rate Smart Local Guide</h2>
       <button type="button" class="review-panel-close" aria-label="Close review window">&times;</button>
     </div>
-    <div class="review-panel-body">
+    <div class="review-panel-body" id="rpLoginNote" hidden style="text-align:center;">
+      <p>Please log in to write a review. Reading reviews is open to everyone.</p>
+      <a class="btn btn-primary" id="rpLoginLink" href="#">Log in or create account</a>
+    </div>
+    <div class="review-panel-body" id="rpForm">
       <div>
         <span class="review-label">Your rating</span>
         <div class="review-stars" id="rpStars"></div>
@@ -148,10 +154,14 @@ function buildPanel() {
 
   const open = (services) => {
     if (services && services.length) chips.setSelected(services);
+    const loggedIn = authManager.isLoggedIn();
+    panel.querySelector("#rpForm").hidden = !loggedIn;
+    panel.querySelector("#rpLoginNote").hidden = loggedIn;
+    panel.querySelector("#rpLoginLink").href = authManager.loginUrl();
     panel.classList.add("open");
     tab.setAttribute("aria-expanded", "true");
     setStatus("");
-    comment.focus();
+    if (loggedIn) comment.focus();
   };
   const close = () => {
     panel.classList.remove("open");
@@ -235,7 +245,7 @@ export function renderReviewCard(item, showService = true) {
       <p>${escapeHtml(item.comment)}</p>
       <div class="review-card-meta">
         ${showService && item.service_used ? `<span class="badge badge-primary">${escapeHtml(item.service_used)}</span>` : "<span></span>"}
-        <span class="text-muted">${escapeHtml(item.created_at || "")}</span>
+        <span class="text-muted">${escapeHtml(item.username || "Traveller")} · ${escapeHtml(formatDateTime(item.created_at))}</span>
       </div>
     </article>`;
 }

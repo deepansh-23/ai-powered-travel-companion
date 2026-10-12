@@ -106,6 +106,30 @@ class CaptchaManager {
     });
   }
 
+  /**
+   * Draws the CAPTCHA checkbox inside `container` (used by the login / sign-up forms).
+   * Resolves {enabled:false} when no CAPTCHA keys are configured.
+   */
+  async mountWidget(container, { onToken, onExpire, onError } = {}) {
+    if (!this.config) this.config = await api.getCaptchaConfig();
+    if (!this.config.enabled) return { enabled: false, reset() {} };
+    await this.loadScript(this.config.script_url);
+    const provider = await this.waitForProvider();
+    const globalName = this.config.provider === "turnstile" ? "turnstile" : "grecaptcha";
+    const widgetId = provider.render(container, {
+      sitekey: this.config.site_key,
+      callback: (token) => onToken && onToken(token),
+      "expired-callback": () => onExpire && onExpire(),
+      "error-callback": () => onError && onError()
+    });
+    return {
+      enabled: true,
+      reset() {
+        try { window[globalName].reset(widgetId); } catch (_) {}
+      }
+    };
+  }
+
   renderVerificationModal() {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay open";

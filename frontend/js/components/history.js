@@ -6,7 +6,7 @@
 import { api } from "../api.js";
 import { modal } from "./modal.js";
 import { toast } from "./toast.js";
-import { escapeHtml, formatCurrency, formatDuration } from "../utils/formatters.js";
+import { escapeHtml, formatDateTime } from "../utils/formatters.js";
 
 export function renderHistoryItem(item, onDeleteCallback) {
   const card = document.createElement("div");
@@ -19,7 +19,7 @@ export function renderHistoryItem(item, onDeleteCallback) {
     <div class="history-main-info">
       <div class="history-meta">
         <span class="badge ${badgeClass}">${escapeHtml(item.feature_type.toUpperCase())}</span>
-        <span class="text-muted">${escapeHtml(item.created_at)}</span>
+        <span class="text-muted">${escapeHtml(formatDateTime(item.created_at))}</span>
       </div>
       <h4>${escapeHtml(item.title)}</h4>
       <p style="font-size:0.9rem;margin-top:4px;">${escapeHtml(item.preview)}</p>
@@ -116,7 +116,7 @@ function openReconstructedModal(item) {
     `;
   } else {
     bodyHtml = `
-      <div style="font-size:0.9rem;color:var(--color-text-muted);margin-bottom:12px;">Saved on: ${escapeHtml(item.created_at)}</div>
+      <div style="font-size:0.9rem;color:var(--color-text-muted);margin-bottom:12px;">Saved on: ${escapeHtml(formatDateTime(item.created_at))}</div>
       <p style="margin-bottom:16px;">${escapeHtml(item.preview)}</p>
       <pre style="background:var(--color-surface-soft);padding:14px;border-radius:var(--radius-md);overflow-x:auto;font-size:0.85rem;border:1px solid var(--color-border);">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
     `;
@@ -197,7 +197,7 @@ function buildItineraryHtml(p, item) {
       ${depDate ? `<span class="badge badge-secondary">🗓️ ${escapeHtml(depDate)} to ${escapeHtml(retDate || depDate)}</span>` : ""}
       <span class="badge badge-secondary">👥 ${travellers} Traveller${travellers > 1 ? "s" : ""}</span>
       ${p.data_mode === "mock" ? `<span class="badge badge-secondary">Mock data</span>` : ""}
-      <span class="badge badge-secondary">Saved: ${escapeHtml(item.created_at || "Recent")}</span>
+      <span class="badge badge-secondary">Saved: ${escapeHtml(formatDateTime(item.created_at) || "Recent")}</span>
     </div>
   `;
 

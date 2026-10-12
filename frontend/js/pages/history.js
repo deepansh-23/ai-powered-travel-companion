@@ -6,12 +6,26 @@ import { api } from "../api.js";
 import { renderHistoryItem } from "../components/history.js";
 import { toast } from "../components/toast.js";
 import { escapeHtml } from "../utils/formatters.js";
+import { renderSessionsList } from "../components/saved-sessions.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const container = document.getElementById("historyList");
   const filterButtons = document.querySelectorAll(".history-filter-btn");
 
   let currentFilter = "all";
+
+  // Saved sessions (work in progress) live above the finished History items
+  async function loadSavedSessions() {
+    const box = document.getElementById("savedSessionsList");
+    if (!box) return;
+    try {
+      const sessions = await api.listSessions();
+      renderSessionsList(box, sessions, { showService: true, onChange: loadSavedSessions });
+    } catch (err) {
+      box.innerHTML = `<p class="text-muted">Saved sessions could not be loaded: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+  loadSavedSessions();
 
   filterButtons.forEach(btn => {
     btn.addEventListener("click", () => {

@@ -4,7 +4,7 @@
 
 import { state } from "./state.js";
 import { initNavbar } from "./components/navbar.js";
-import { captchaManager } from "./components/captcha.js";
+import { authManager } from "./components/auth.js";
 import { initReviews } from "./components/review-widget.js";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -14,8 +14,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initialize Navbar
   initNavbar();
 
-  // Initialize Security / CAPTCHA Protection (Section 25)
-  captchaManager.initSiteProtection();
+  // Accounts: who is logged in, navbar Log in / Log out, protected pages
+  authManager.init();
 
   // Reviews: floating "Rate us" tab, rate-this-service strips, Home top reviews
   initReviews();

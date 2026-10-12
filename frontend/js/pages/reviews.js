@@ -5,13 +5,28 @@
 
 import { api } from "../api.js";
 import { toast } from "../components/toast.js";
-import { escapeHtml } from "../utils/formatters.js";
+import { escapeHtml, formatDateTime } from "../utils/formatters.js";
+import { authManager } from "../components/auth.js";
 import { renderServiceChips, submitReview, REVIEW_SERVICES, GENERAL_SERVICES } from "../components/review-widget.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("feedbackForm");
   const listContainer = document.getElementById("reviewsList");
   if (!listContainer) return;
+
+  // Posting needs a login; reading does not
+  const loginNote = document.getElementById("reviewLoginNote");
+  function syncLoginNote() {
+    const loggedIn = authManager.isLoggedIn();
+    if (loginNote) {
+      loginNote.hidden = loggedIn;
+      const link = loginNote.querySelector("a");
+      if (link) link.href = authManager.loginUrl();
+    }
+    if (form) form.querySelectorAll("input, textarea, select, button").forEach(el => { el.disabled = !loggedIn; });
+  }
+  if (authManager.ready) syncLoginNote();
+  else window.addEventListener("slg:auth-ready", syncLoginNote, { once: true });
 
   let allItems = [];
   let activeFilter = "All";
@@ -96,7 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="rating-stars" style="color:var(--color-accent);font-size:1.1rem;font-weight:700;">${stars}</span>
                 ${item.service_used ? `<span class="badge badge-primary" style="margin-left:8px;">${escapeHtml(item.service_used)}</span>` : ""}
               </div>
-              <span class="text-muted" style="font-size:0.8rem;">${escapeHtml(item.created_at)}</span>
+              <span class="text-muted" style="font-size:0.8rem;">${escapeHtml(item.username || "Traveller")} · ${escapeHtml(formatDateTime(item.created_at))}</span>
             </div>
             <p style="margin-top:8px;font-size:0.95rem;line-height:1.5;color:var(--color-text-primary);">
               ${escapeHtml(item.comment)}

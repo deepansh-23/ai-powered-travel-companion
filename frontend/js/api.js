@@ -13,8 +13,9 @@ class ApiClient {
       "Accept": "application/json"
     };
 
+    const { silent401, ...fetchOptions } = options;
     const config = {
-      ...options,
+      ...fetchOptions,
       headers: {
         ...defaultHeaders,
         ...options.headers
@@ -35,6 +36,10 @@ class ApiClient {
         if (response.status === 403 && /human verification/i.test(errorMsg)) {
           window.dispatchEvent(new CustomEvent("slg:captcha-required"));
         }
+        // Not logged in (or session ended): send the visitor to the login page
+        if (response.status === 401 && !silent401 && /log in/i.test(errorMsg)) {
+          window.dispatchEvent(new CustomEvent("slg:login-required"));
+        }
         throw new Error(errorMsg);
       }
       return await response.json();
@@ -44,6 +49,54 @@ class ApiClient {
       }
       throw err;
     }
+  }
+
+  // Accounts
+  getMe() {
+    return this._request("/api/auth/me", { method: "GET" });
+  }
+
+  register(username, password, captchaToken) {
+    return this._request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password, captcha_token: captchaToken || null })
+    });
+  }
+
+  login(username, password, captchaToken) {
+    return this._request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password, captcha_token: captchaToken || null })
+    });
+  }
+
+  recoverAccount(username, recoveryCode, newPassword, captchaToken) {
+    return this._request("/api/auth/recover", {
+      method: "POST",
+      body: JSON.stringify({ username, recovery_code: recoveryCode, new_password: newPassword, captcha_token: captchaToken || null })
+    });
+  }
+
+  logout() {
+    return this._request("/api/auth/logout", { method: "POST", silent401: true });
+  }
+
+  // Saved sessions (drafts a user can resume later)
+  listSessions(service) {
+    const q = service ? `?service=${encodeURIComponent(service)}` : "";
+    return this._request(`/api/sessions${q}`, { method: "GET", silent401: true });
+  }
+
+  getSession(id) {
+    return this._request(`/api/sessions/${encodeURIComponent(id)}`, { method: "GET" });
+  }
+
+  saveSession(payload) {
+    return this._request("/api/sessions", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  deleteSession(id) {
+    return this._request(`/api/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   // Health
@@ -116,9 +169,13 @@ class ApiClient {
   }
 
   createHistory(item) {
+    // History belongs to a logged-in user. Public searches by visitors who are not
+    // logged in are simply not saved (no error, no redirect).
+    if (window.__slgLoggedIn === false) return Promise.resolve(null);
     return this._request("/api/history", {
       method: "POST",
-      body: JSON.stringify(item)
+      body: JSON.stringify(item),
+      silent401: true
     });
   }
 

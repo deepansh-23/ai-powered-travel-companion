@@ -3,6 +3,8 @@
 
 from fastapi import APIRouter
 
+from app.db import db_status
+
 router = APIRouter(prefix="/api/health", tags=["Health"])
 
 
@@ -11,5 +13,6 @@ async def health_check():
     """Return health status and service identifier."""
     return {
         "status": "ok",
-        "service": "smart-local-guide"
+        "service": "smart-local-guide",
+        "database": {"configured": db_status()["configured"], "ready": db_status()["ready"]}
     }

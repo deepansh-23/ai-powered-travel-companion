@@ -11,6 +11,7 @@ class FeedbackItem(BaseModel):
     comment: str
     service_used: Optional[str] = None
     created_at: str
+    username: Optional[str] = None  # reviewer (None for old anonymous reviews)
 
 
 class FeedbackCreateRequest(BaseModel):

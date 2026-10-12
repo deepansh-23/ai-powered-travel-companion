@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="../css/pages.css">
   <link rel="stylesheet" href="../css/responsive.css">
 </head>
-<body>
+<body data-requires-login>
   <div class="app-wrapper">
     <!-- Navbar -->
     <header class="app-navbar" role="banner">
@@ -96,7 +96,8 @@
             <label for="areaInput" class="sr-only">Enter area name</label>
             <input type="text" id="areaInput" class="form-input" placeholder="Enter a neighborhood or district..." required>
           </div>
-          <button type="button" id="btnGenerateNew" class="btn btn-secondary" title="Clear the current guide and start a new one (History is kept)">Generate New</button>
+          <button type="button" id="btnSaveSession" class="btn btn-secondary" title="Save what you have done so far to your account and continue later">💾 Save session</button>
+            <button type="button" id="btnGenerateNew" class="btn btn-secondary" title="Clear the current guide and start a new one (History is kept)">Generate New</button>
           <button type="submit" class="btn btn-primary">Summarize Area</button>
         </form>
       </div>

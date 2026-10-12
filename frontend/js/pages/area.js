@@ -6,6 +6,7 @@ import { api } from "../api.js";
 import { toast } from "../components/toast.js";
 import { escapeHtml } from "../utils/formatters.js";
 import { announceServiceReady, announceServiceReset } from "../components/review-widget.js";
+import { initSavedSessions, forgetDraft } from "../components/saved-sessions.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("areaForm");
@@ -49,10 +50,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  initSavedSessions({
+    service: "area",
+    saveButtonId: "btnSaveSession",
+    hasActiveState: () => !!sessionStorage.getItem(STORAGE_KEY),
+    buildSave: () => {
+      let snap = null;
+      try { snap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch (_) {}
+      const has = !!snap && !!snap.area_name;
+      return { hasContent: has, title: `Area Guide: ${has ? snap.area_name : ""}`.trim(), state: snap };
+    }
+  });
+
   const btnGenerateNew = document.getElementById("btnGenerateNew");
   if (btnGenerateNew) {
     btnGenerateNew.addEventListener("click", () => {
       try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
+      forgetDraft("area");
       document.getElementById("areaInput").value = "";
       renderPrompt();
       document.getElementById("areaInput").focus();

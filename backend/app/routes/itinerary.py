@@ -20,7 +20,7 @@ from app.services.places_service import (
     _fetch_geoapify_places,
     _geoapify_feature_to_dict,
 )
-from app.security import require_human
+from app.security import require_user
 from app.services.directions_service import enrich_itinerary
 from fastapi import APIRouter, HTTPException, status, Depends
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/itinerary", tags=["Itinerary"])
 
 
-@router.post("/generate", response_model=ItineraryResponse, dependencies=[Depends(require_human)])
+@router.post("/generate", response_model=ItineraryResponse, dependencies=[Depends(require_user)])
 async def generate_itinerary(req: ItineraryRequest):
   """Generate a multi-day personalized itinerary."""
   verified_places: Optional[List[Dict[str, Any]]] = None

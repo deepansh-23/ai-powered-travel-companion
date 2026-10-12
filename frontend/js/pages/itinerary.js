@@ -8,6 +8,8 @@ import { toast } from "../components/toast.js";
 import { modal } from "../components/modal.js";
 import { escapeHtml, titleCase } from "../utils/formatters.js";
 import { announceServiceReady, announceServiceReset } from "../components/review-widget.js";
+import { authManager } from "../components/auth.js";
+import { initSavedSessions, forgetDraft } from "../components/saved-sessions.js";
 
 const DEFAULT_CUISINES = [
   "Local Street Food", "Indian", "North Indian / Mughlai", "South Indian",
@@ -55,6 +57,12 @@ class ItineraryPlannerController {
     this.initTagPickers();
     this.attachEventListeners();
     this.restoreSessionState();
+    initSavedSessions({
+      service: "itinerary",
+      saveButtonId: "btnSaveSession",
+      hasActiveState: () => !!sessionStorage.getItem("slg_session_itinerary"),
+      buildSave: () => this.buildDraftForSaving()
+    });
   }
 
   initDates() {
@@ -194,6 +202,7 @@ class ItineraryPlannerController {
 
   resetActiveState() {
     sessionStorage.removeItem("slg_session_itinerary");
+    forgetDraft("itinerary");
     this.selectedOutbound = null;
     this.selectedReturn = null;
     this.selectedHotel = null;
@@ -600,7 +609,7 @@ class ItineraryPlannerController {
     });
   }
 
-  selectHotel(h) {
+  selectHotel(h, quiet = false) {
     this.selectedHotel = h;
     this.hotelSkipped = false;
     document.querySelectorAll("#hotelListContainer .hotel-card").forEach(c => {
@@ -616,7 +625,7 @@ class ItineraryPlannerController {
     }
 
     this.persistSessionState();
-    toast.success(`Selected hotel: ${h.name}`);
+    if (!quiet) toast.success(`Selected hotel: ${h.name}`);
   }
 
   async openHotelPriceComparisonModal(hotel) {
@@ -1189,25 +1198,77 @@ class ItineraryPlannerController {
 
   // --- Session Persistence (Section 19) ---
 
-  persistSessionState() {
-    const data = {
+  /** Everything on the page right now: inputs, selections, hotel list, preferences, result. */
+  collectDraftState() {
+    const val = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+    // Before the first search the typed values only exist in the form fields
+    const live = this.currentStep === 1;
+    const interests = Array.from(document.querySelectorAll(".chip-selection-grid .select-chip.active"))
+      .map(c => c.dataset.value || c.textContent.trim());
+
+    return {
       currentStep: this.currentStep,
-      source: this.source,
-      destination: this.destination,
-      outboundDate: this.outboundDate,
-      returnDate: this.returnDate,
-      travelers: this.travelers,
-      preference: this.preference,
+      source: live ? val("itinerarySource").trim() : this.source,
+      destination: live ? val("itineraryDest").trim() : this.destination,
+      outboundDate: live ? val("itineraryDepDate") : this.outboundDate,
+      returnDate: live ? val("itineraryRetDate") : this.returnDate,
+      travelers: live ? (parseInt(val("itineraryTravelers"), 10) || 1) : this.travelers,
+      preference: live ? (val("itineraryPreference") || this.preference) : this.preference,
       transportData: this.transportData,
       selectedOutbound: this.selectedOutbound,
       selectedReturn: this.selectedReturn,
+      hotelData: this.hotelData,
       selectedHotel: this.selectedHotel,
       hotelSkipped: this.hotelSkipped,
-      finalItinerary: this.finalItinerary
+      finalItinerary: this.finalItinerary,
+      prefs: {
+        budget: val("itineraryBudgetInput"),
+        foodType: val("foodType"),
+        pace: val("itineraryPace"),
+        localTransport: val("itineraryLocalTransport"),
+        hotelSort: val("hotelSortSelect"),
+        interests,
+        cuisines: this.cuisinePicker ? this.cuisinePicker.getTags() : [],
+        bakery: this.bakeryPicker ? this.bakeryPicker.getTags() : []
+      }
     };
+  }
+
+  /** Title + state for the "Save session" button. */
+  buildDraftForSaving() {
+    const state = this.collectDraftState();
+    const route = [state.source, state.destination].filter(Boolean).join(" → ") || "New trip";
+    const dates = state.outboundDate ? ` (${state.outboundDate}${state.returnDate ? " to " + state.returnDate : ""})` : "";
+    const stepNames = ["", "route", "transport", "hotel", "preferences", "final itinerary"];
+    return {
+      hasContent: !!(state.source || state.destination),
+      title: `${route}${dates} · step ${state.currentStep} of 5: ${stepNames[state.currentStep] || ""}`,
+      state
+    };
+  }
+
+  persistSessionState() {
     try {
-      sessionStorage.setItem("slg_session_itinerary", JSON.stringify(data));
+      sessionStorage.setItem("slg_session_itinerary", JSON.stringify(this.collectDraftState()));
     } catch (_) {}
+  }
+
+  applyPrefs(prefs) {
+    if (!prefs) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== "") el.value = v; };
+    set("itineraryBudgetInput", prefs.budget);
+    set("itineraryBudgetSlider", prefs.budget);
+    set("foodType", prefs.foodType);
+    set("itineraryPace", prefs.pace);
+    set("itineraryLocalTransport", prefs.localTransport);
+    set("hotelSortSelect", prefs.hotelSort);
+    if (Array.isArray(prefs.interests)) {
+      document.querySelectorAll(".chip-selection-grid .select-chip").forEach(chip => {
+        chip.classList.toggle("active", prefs.interests.includes(chip.dataset.value || chip.textContent.trim()));
+      });
+    }
+    if (this.cuisinePicker && prefs.cuisines) this.cuisinePicker.setTags(prefs.cuisines);
+    if (this.bakeryPicker && prefs.bakery) this.bakeryPicker.setTags(prefs.bakery);
   }
 
   restoreSessionState() {
@@ -1215,7 +1276,7 @@ class ItineraryPlannerController {
       const raw = sessionStorage.getItem("slg_session_itinerary");
       if (!raw) return;
       const data = JSON.parse(raw);
-      if (!data || !data.destination) return;
+      if (!data || (!data.destination && !data.source)) return;
 
       this.source = data.source || "";
       this.destination = data.destination || "";
@@ -1229,6 +1290,8 @@ class ItineraryPlannerController {
       this.selectedHotel = data.selectedHotel;
       this.hotelSkipped = data.hotelSkipped;
       this.finalItinerary = data.finalItinerary;
+      this.hotelData = data.hotelData || [];
+      this.applyPrefs(data.prefs);
 
       // Restore form inputs
       const srcInput = document.getElementById("itinerarySource");
@@ -1260,7 +1323,16 @@ class ItineraryPlannerController {
         if (this.selectedReturn) {
           this.selectTransportOption("return", this.selectedReturn);
         }
-        this.setStep(2);
+
+        const step = data.currentStep || 2;
+        if (step >= 3 && this.hotelData.length > 0) {
+          this.setStep(3);
+          this.renderHotelsList(this.hotelData);
+          if (this.selectedHotel) this.selectHotel(this.selectedHotel, true);
+          if (step >= 4 && (this.selectedHotel || this.hotelSkipped)) this.setStep(4);
+        } else {
+          this.setStep(2);
+        }
       }
     } catch (err) {
       console.warn("Failed to restore itinerary session state:", err);

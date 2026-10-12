@@ -11,6 +11,7 @@ import { renderFilterChips } from "./filter-chips.js";
 import { renderLoadingSkeletons } from "./loader.js";
 import { toast } from "./toast.js";
 import { announceServiceReady, announceServiceReset } from "./review-widget.js";
+import { initSavedSessions, forgetDraft } from "./saved-sessions.js";
 
 const RATE_SERVICE_NAMES = {
   places: "Places Near You",
@@ -52,6 +53,20 @@ export class NearbyExplorerController {
     // 5. Session persistence + Generate New (Sections 19, 20, 22)
     this.setupGenerateNew();
     this.restoreFromSession();
+    initSavedSessions({
+      service: this.config.pageType,
+      saveButtonId: "btnSaveSession",
+      hasActiveState: () => !!this.loadSnapshot(),
+      buildSave: () => {
+        const snap = this.loadSnapshot();
+        const has = !!snap && Array.isArray(snap.places) && snap.places.length > 0;
+        return {
+          hasContent: has,
+          title: `${RATE_SERVICE_NAMES[this.config.pageType] || "Search"}: ${has ? snap.location : ""}`.trim(),
+          state: snap
+        };
+      }
+    });
   }
 
   // ---- Session state (temporary, per tab) — separate from persistent History ----
@@ -148,6 +163,7 @@ export class NearbyExplorerController {
     try {
       sessionStorage.removeItem(this.storageKey);
     } catch (_) {}
+    forgetDraft(this.config.pageType);
     state.clearSelection();
     state.setResults(null, []);
     this._lastCounts = {};

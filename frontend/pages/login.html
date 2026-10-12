@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log in — Smart Local Guide</title>
+  <meta name="description" content="Log in or create a Smart Local Guide account to save your trips, history and reviews.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Core Styles -->
+  <link rel="stylesheet" href="../css/variables.css">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/pages.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Navbar -->
+    <header class="app-navbar" role="banner">
+      <div class="navbar-inner">
+        <a href="../index.html" class="brand-link" aria-label="Smart Local Guide Home">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          <span>Smart Local Guide</span>
+        </a>
+
+        <nav class="nav-links" aria-label="Main Navigation">
+          <a href="../index.html" class="nav-link">Home</a>
+          <a href="itinerary.html" class="nav-link">Itinerary Planner</a>
+          <div class="nav-dropdown">
+            <button class="nav-link nav-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+              <span>Other Services</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-dropdown-menu" role="menu">
+              <a href="places.html" class="nav-dropdown-item" role="menuitem">📍 Places Near You</a>
+              <a href="area.html" class="nav-dropdown-item" role="menuitem">🏙️ Area Guide</a>
+              <a href="cafes.html" class="nav-dropdown-item" role="menuitem">☕ Quiet Work Cafés</a>
+              <a href="medical.html" class="nav-dropdown-item" role="menuitem">🏥 24/7 Medical Care</a>
+            </div>
+          </div>
+          <a href="history.html" class="nav-link">History / PDF</a>
+          <a href="reviews.html" class="nav-link">Reviews</a>
+        </nav>
+
+        <div class="navbar-actions">
+          <div class="theme-selector-wrapper">
+            <label for="themeSelect" class="sr-only">Choose Color Theme</label>
+            <select id="themeSelect" class="theme-dropdown" aria-label="Select theme">
+              <option value="warm">Warm Aesthetic</option>
+              <option value="rose-gold">Rose Gold</option>
+              <option value="sage-green">Sage Green</option>
+              <option value="classic-light">Classic Light</option>
+              <option value="dark">Dark Theme</option>
+            </select>
+          </div>
+
+          <button id="mobileNavToggle" class="mobile-nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Drawer -->
+      <div id="mobileDrawer" class="mobile-drawer" role="navigation" aria-label="Mobile Navigation">
+        <a href="../index.html" class="nav-link">Home</a>
+        <a href="itinerary.html" class="nav-link">Itinerary Planner</a>
+        <div class="mobile-drawer-group-title">Other Services</div>
+        <a href="places.html" class="nav-link">📍 Places Near You</a>
+        <a href="area.html" class="nav-link">🏙️ Area Guide</a>
+        <a href="cafes.html" class="nav-link">☕ Quiet Work Cafés</a>
+        <a href="medical.html" class="nav-link">🏥 24/7 Medical Care</a>
+        <div class="mobile-drawer-group-title">Account & Feedback</div>
+        <a href="history.html" class="nav-link">History / PDF</a>
+        <a href="reviews.html" class="nav-link">Reviews</a>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="auth-card" id="authCard">
+        <h1 class="auth-title">Welcome to Smart Local Guide</h1>
+        <p class="auth-subtitle">Log in to save your trips, history and reviews, and to use the Itinerary Planner and Area Guide.</p>
+
+        <div id="authUnavailable" class="auth-banner" role="alert" hidden>
+          Accounts are temporarily unavailable. Places, Cafés and Medical search still work without logging in.
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="Account">
+          <button type="button" class="auth-tab active" id="tabLogin" role="tab" aria-selected="true" data-panel="panelLogin">Log in</button>
+          <button type="button" class="auth-tab" id="tabRegister" role="tab" aria-selected="false" data-panel="panelRegister">Create account</button>
+        </div>
+
+        <div id="authMessage" class="auth-message" role="alert" aria-live="polite"></div>
+
+        <!-- Log in -->
+        <form id="panelLogin" class="auth-panel" autocomplete="on" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="loginUsername">Username</label>
+            <input class="form-input" id="loginUsername" name="username" type="text" autocomplete="username" maxlength="30" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="loginPassword">Password</label>
+            <input class="form-input" id="loginPassword" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+          </div>
+          <label class="auth-show"><input type="checkbox" data-toggle-password="loginPassword"> Show password</label>
+          <div class="auth-captcha" id="captchaLogin"></div>
+          <button type="submit" class="btn btn-primary auth-submit">Log in</button>
+          <button type="button" class="auth-link" id="linkForgot">Forgot password?</button>
+        </form>
+
+        <!-- Create account -->
+        <form id="panelRegister" class="auth-panel" autocomplete="on" hidden novalidate>
+          <div class="form-group">
+            <label class="form-label" for="regUsername">Choose a username</label>
+            <input class="form-input" id="regUsername" name="username" type="text" autocomplete="username" maxlength="30" required>
+            <div class="auth-hint">3 to 30 characters: letters, numbers and underscore.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regPassword">Choose a password</label>
+            <input class="form-input" id="regPassword" name="password" type="password" autocomplete="new-password" maxlength="128" required>
+            <div class="auth-hint">At least 8 characters. A short sentence works well.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regPassword2">Repeat password</label>
+            <input class="form-input" id="regPassword2" type="password" autocomplete="new-password" maxlength="128" required>
+          </div>
+          <label class="auth-show"><input type="checkbox" data-toggle-password="regPassword regPassword2"> Show passwords</label>
+          <div class="auth-captcha" id="captchaRegister"></div>
+          <button type="submit" class="btn btn-primary auth-submit">Create account</button>
+        </form>
+
+        <!-- Forgot password -->
+        <form id="panelRecover" class="auth-panel" hidden novalidate>
+          <h2 class="auth-panel-title">Reset your password</h2>
+          <p class="auth-hint">Use the recovery code you saved when you created your account.</p>
+          <div class="form-group">
+            <label class="form-label" for="recUsername">Username</label>
+            <input class="form-input" id="recUsername" type="text" autocomplete="username" maxlength="30" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="recCode">Recovery code</label>
+            <input class="form-input auth-code-input" id="recCode" type="text" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="recPassword">New password</label>
+            <input class="form-input" id="recPassword" type="password" autocomplete="new-password" maxlength="128" required>
+          </div>
+          <label class="auth-show"><input type="checkbox" data-toggle-password="recPassword"> Show password</label>
+          <div class="auth-captcha" id="captchaRecover"></div>
+          <button type="submit" class="btn btn-primary auth-submit">Reset password</button>
+          <button type="button" class="auth-link" id="linkBackToLogin">Back to log in</button>
+        </form>
+
+        <!-- Recovery code (shown once, after sign-up or a reset) -->
+        <section id="panelRecoveryCode" class="auth-panel" hidden aria-live="polite">
+          <h2 class="auth-panel-title">Save your recovery code</h2>
+          <p>This is the <strong>only way to reset your password</strong>, because accounts have no email. It is shown <strong>once</strong>. Store it somewhere safe, like a password manager.</p>
+          <div class="auth-code-box" id="recoveryCodeValue" tabindex="0"></div>
+          <div class="auth-code-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCopyCode">Copy code</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnDownloadCode">Download as file</button>
+          </div>
+          <label class="auth-show"><input type="checkbox" id="chkSavedCode"> I have saved my recovery code</label>
+          <button type="button" class="btn btn-primary auth-submit" id="btnContinue" disabled>Continue</button>
+        </section>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer" role="contentinfo">
+      <div class="footer-inner">
+        <div>
+          <strong>Smart Local Guide</strong> — Accounts
+          <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:2px;">Built with HTML5, CSS3, Vanilla JS & FastAPI.</p>
+        </div>
+        <ul class="footer-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="itinerary.html">Itinerary</a></li>
+          <li><a href="places.html">Places</a></li>
+          <li><a href="history.html">History</a></li>
+        </ul>
+      </div>
+    </footer>
+  </div>
+
+  <script src="../js/config.js"></script>
+  <script type="module" src="../js/app.js"></script>
+  <script type="module" src="../js/pages/login.js"></script>
+</body>
+</html>
