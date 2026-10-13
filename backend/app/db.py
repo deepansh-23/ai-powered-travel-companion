@@ -32,10 +32,20 @@ def is_configured() -> bool:
     return bool(settings.DATABASE_URL or (settings.DB_HOST and settings.DB_NAME and settings.DB_USER))
 
 
+
 def _build_url():
     if settings.DATABASE_URL:
-        return settings.DATABASE_URL
-    # URL.create escapes special characters in the password safely
+        url = settings.DATABASE_URL.strip()
+
+        # Ensure SQLAlchemy uses the asyncpg driver.
+        if url.startswith("postgres://"):
+            url = "postgresql+asyncpg://" + url[len("postgres://"):]
+        elif url.startswith("postgresql://"):
+            url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+
+        return url
+
+    # Fallback to individual database settings.
     return URL.create(
         drivername="postgresql+asyncpg",
         username=settings.DB_USER,
@@ -46,17 +56,23 @@ def _build_url():
     )
 
 
+
 def _connect_args() -> dict:
-    if settings.DATABASE_URL:  # tests / local overrides (e.g. sqlite+aiosqlite)
+    # SQLite test URLs do not require PostgreSQL SSL.
+    if settings.DATABASE_URL and settings.DATABASE_URL.startswith("sqlite"):
         return {}
+
     ca_file = Path(settings.DB_SSL_CA)
     if not ca_file.is_absolute():
         ca_file = settings.PROJECT_ROOT / ca_file
+
     if not ca_file.is_file():
         raise FileNotFoundError(
-            f"Aiven CA certificate not found at {ca_file}. Download ca.pem from the Aiven console "
-            "and place it in the project root (or set DB_SSL_CA)."
+            f"Aiven CA certificate not found at {ca_file}. "
+            "Download ca.pem from Aiven and place it in the project root "
+            "or configure DB_SSL_CA."
         )
+
     return {"ssl": ssl.create_default_context(cafile=str(ca_file))}
 
 
