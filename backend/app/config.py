@@ -1,4 +1,4 @@
-"""Configuration management for Smart Local Guide backend.
+"""Configuration management for the AI Powered Travel Companion backend.
 Loads configuration from environment variables with safe defaults.
 Never contains hardcoded secrets or API keys.
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 class Settings(BaseSettings):
     # App Information
-    APP_NAME: str = "Smart Local Guide"
+    APP_NAME: str = "AI Powered Travel Companion"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
@@ -74,6 +74,14 @@ class Settings(BaseSettings):
     AUTH_MAX_FAILED_ATTEMPTS: int = 5
     AUTH_LOCKOUT_MINUTES: int = 15
 
+    # Guest sessions (use the planner without an account; nothing is saved to a profile)
+    GUEST_COOKIE_NAME: str = "slg_guest"
+    GUEST_SESSION_HOURS: int = 24
+    GUEST_MAX_STARTS_PER_HOUR_PER_IP: int = 30
+    # Secret used to sign guest cookies. If empty, a random one is made at start-up
+    # (guests then simply start a new guest session after a server restart).
+    AUTH_SECRET: Optional[str] = None
+
     # Legacy aliases kept for backward compatibility with old .env files;
     # they are ignored in production — only the canonical names above matter.
     AI_API_KEY: Optional[str] = None         # not used; kept so old .env files don't crash
@@ -100,6 +108,7 @@ class Settings(BaseSettings):
         "DB_USER",
         "DB_PASSWORD",
         "DATABASE_URL",
+        "AUTH_SECRET",
         mode="before"
     )
     @classmethod

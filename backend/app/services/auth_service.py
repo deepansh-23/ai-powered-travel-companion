@@ -15,12 +15,12 @@ from typing import Optional, Tuple
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db_models import AuthSession, LoginAttempt, User, utcnow
+from app.db_models import AuthSession, Feedback, History, LoginAttempt, SavedSession, User, utcnow
 
 _hasher = PasswordHasher()
 _DUMMY_HASH = _hasher.hash("not-a-real-password-for-timing")
@@ -214,6 +214,29 @@ async def change_password(db: AsyncSession, user: User, current: str, new: str) 
         raise InvalidCredentials("Current password is incorrect.")
     validate_password(new, user.username)
     user.password_hash = _hasher.hash(new)
+    await db.commit()
+
+
+async def delete_account(db: AsyncSession, user: User, password: str) -> None:
+    """Permanently delete the account after re-checking the password.
+
+    Removes the profile, login sessions, history and saved sessions. Reviews stay on the
+    Reviews page but are detached from the account (they become anonymous).
+    """
+    try:
+        ok = _hasher.verify(user.password_hash, password or "")
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
+        ok = False
+    if not ok:
+        raise InvalidCredentials("Password is incorrect. Your account was not deleted.")
+
+    uid, uname = user.id, user.username_lower
+    await db.execute(update(Feedback).where(Feedback.user_id == uid).values(user_id=None))
+    await db.execute(delete(History).where(History.user_id == uid))
+    await db.execute(delete(SavedSession).where(SavedSession.user_id == uid))
+    await db.execute(delete(AuthSession).where(AuthSession.user_id == uid))
+    await db.execute(delete(LoginAttempt).where(LoginAttempt.username_lower == uname))
+    await db.execute(delete(User).where(User.id == uid))
     await db.commit()
 
 

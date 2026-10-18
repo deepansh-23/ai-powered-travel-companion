@@ -1,4 +1,4 @@
-"""Smart Local Guide - Application Runner.
+"""AI Powered Travel Companion - Application Runner.
 Starts the FastAPI backend dev server with live reload.
 Serves both API endpoints and the frontend application seamlessly.
 """

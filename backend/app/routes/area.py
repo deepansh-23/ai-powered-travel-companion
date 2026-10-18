@@ -8,7 +8,7 @@ In live mode (MOCK_MODE=false):
 """
 
 from typing import Any, Dict, List, Optional
-from app.security import require_user
+from app.security import require_user_or_guest
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.config import settings
 from app.models.area import AreaSummarizeRequest, AreaSummarizeResponse
@@ -19,7 +19,7 @@ from app.services.places_service import _fetch_geoapify_places, _geoapify_featur
 router = APIRouter(prefix="/api/area", tags=["Area Guide"])
 
 
-@router.post("/summarize", response_model=AreaSummarizeResponse, dependencies=[Depends(require_user)])
+@router.post("/summarize", response_model=AreaSummarizeResponse, dependencies=[Depends(require_user_or_guest)])
 async def summarize_area(req: AreaSummarizeRequest):
     """Summarize an urban area with distinct analytical sections."""
     verified_places: Optional[List[Dict[str, Any]]] = None

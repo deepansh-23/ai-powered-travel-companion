@@ -1,4 +1,4 @@
-"""Smart Local Guide - FastAPI Main Application.
+"""AI Powered Travel Companion - FastAPI Main Application.
 """
 
 from contextlib import asynccontextmanager

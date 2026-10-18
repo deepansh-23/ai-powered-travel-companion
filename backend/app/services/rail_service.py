@@ -5,6 +5,7 @@ Never invents train facts or booking URLs.
 
 import hashlib
 import logging
+import time
 from typing import Optional, List, Dict, Any, Tuple
 import httpx
 
@@ -61,6 +62,35 @@ class RailRadarClient:
             return None
         return key.strip()
 
+    async def _get_json(self, path: str, params: Optional[Dict[str, Any]] = None, timeout: float = 12.0) -> Dict[str, Any]:
+        """GET helper shared by the lookup endpoints (key stays on the server)."""
+        api_key = self._get_api_key()
+        if not api_key:
+            raise RuntimeError("RAILRADAR_API_KEY is not configured.")
+        headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(f"{self.BASE_URL}{path}", headers=headers, params=params or {})
+        if response.status_code in (401, 403):
+            raise RuntimeError("Invalid RAILRADAR_API_KEY: authentication failed with RailRadar.")
+        if response.status_code == 429:
+            raise RuntimeError("RailRadar rate limit reached.")
+        if response.status_code == 404:
+            return {"success": True, "data": None}
+        if response.status_code >= 400:
+            raise RuntimeError(f"RailRadar API error (HTTP {response.status_code}).")
+        try:
+            return response.json()
+        except Exception:
+            raise RuntimeError("Malformed response from RailRadar.")
+
+    async def search_stations(self, query: str, limit: int = 20) -> Dict[str, Any]:
+        """Station autocomplete (GET /v1/lookup/search/stations): codes, names and city."""
+        return await self._get_json("/lookup/search/stations", {"q": query, "limit": limit})
+
+    async def get_prs_directory(self) -> Dict[str, Any]:
+        """All PRS-reserved trains with the classes each one carries (GET /v1/lookup/trains/prs)."""
+        return await self._get_json("/lookup/trains/prs", timeout=25.0)
+
     async def get_trains_between_stations(
         self,
         from_code: str,
@@ -97,18 +127,121 @@ class RailRadarClient:
                 raise RuntimeError("Malformed response from RailRadar.")
 
 
+_STATION_CACHE_TTL = 3600.0       # station names rarely change
+_PRS_CACHE_TTL = 24 * 3600.0      # one big directory call per day keeps API usage tiny
+
+
 class RailService:
     def __init__(self):
         self.client = RailRadarClient()
+        self._station_cache: Dict[str, Tuple[float, List[Dict[str, str]]]] = {}
+        self._prs_cache: Optional[Tuple[float, Dict[str, Dict[str, Any]]]] = None
+
+    # ------------------------------------------------------------------ stations
+    @staticmethod
+    def parse_station_results(data: Dict[str, Any], city_hint: str = "") -> List[Dict[str, str]]:
+        """Normalises the autocomplete response and lists stations of the searched city first."""
+        rows = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            return []
+        out: List[Dict[str, str]] = []
+        seen = set()
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            code = str(r.get("code") or "").strip().upper()
+            name = str(r.get("name") or "").strip()
+            if not code or not name or code in seen:
+                continue
+            seen.add(code)
+            out.append({"code": code, "name": name, "city": str(r.get("city") or "").strip()})
+        hint = city_hint.strip().lower()
+        if hint:
+            out.sort(key=lambda x: 0 if x["city"].lower() == hint else 1)  # stable: keeps API order inside groups
+        return out
+
+    async def find_stations(self, query: str, limit: int = 20) -> Tuple[List[Dict[str, str]], Optional[str]]:
+        """Stations for a city or station name. Returns (stations, notice); never invents stations."""
+        q = (query or "").strip()
+        if len(q) < 2:
+            return [], "Type at least 2 letters of the city or station name."
+        key = f"{q.lower()}|{limit}"
+        cached = self._station_cache.get(key)
+        if cached and time.time() - cached[0] < _STATION_CACHE_TTL:
+            return cached[1], None
+        try:
+            data = await self.client.search_stations(q, limit)
+            stations = self.parse_station_results(data, q)
+            if stations:
+                self._station_cache[key] = (time.time(), stations)
+            return stations, (None if stations else f"No railway stations found for '{q}'. Check the spelling.")
+        except RuntimeError as exc:
+            # Honest fallback: only the one station already known for this city, clearly labelled
+            code = self.resolve_station_code(q)
+            notice = f"Live station search unavailable ({exc})"
+            if code:
+                return [{"code": code, "name": f"{q.title()} (default main station)", "city": q.title()}], \
+                    notice + ". Showing the default main station only."
+            return [], notice
+        except Exception as exc:
+            logger.warning(f"RailRadar station search error: {exc}")
+            return [], "Station search is temporarily unavailable."
+
+    # ------------------------------------------------------------------ classes per train (verified)
+    @staticmethod
+    def parse_prs_directory(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        rows = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(rows, dict):
+            return {}
+        out: Dict[str, Dict[str, Any]] = {}
+        for number, info in rows.items():
+            if isinstance(info, dict) and isinstance(info.get("classes"), list):
+                out[str(number)] = {
+                    "classes": [str(c).strip().upper() for c in info["classes"]],
+                    "type": info.get("type"),
+                    "name": info.get("name"),
+                }
+        return out
+
+    async def get_train_classes(self) -> Dict[str, Dict[str, Any]]:
+        """{train_number: {'classes': ['1A','2A','3A'], ...}} from RailRadar (cached for a day)."""
+        if self._prs_cache and time.time() - self._prs_cache[0] < _PRS_CACHE_TTL:
+            return self._prs_cache[1]
+        data = await self.client.get_prs_directory()
+        directory = self.parse_prs_directory(data)
+        if directory:
+            self._prs_cache = (time.time(), directory)
+        return directory
 
     def resolve_station_code(self, city_or_station: str) -> Optional[str]:
         clean = city_or_station.strip()
         if len(clean) in (3, 4) and clean.isalpha() and clean.isupper():
             return clean
 
-        lower = clean.lower()
+        # 'Amritsar, Punjab, India' -> 'amritsar'
+        lower = " ".join(clean.split(",")[0].strip().lower().split())
         # Exact match only: never guess a station from a partial name
         return RAILWAY_STATION_MAP.get(lower)
+
+    async def resolve_station_code_live(self, city: str) -> Optional[str]:
+        """Built-in list first; otherwise the main station RailRadar knows for exactly this city name.
+
+        Cities outside India (or unknown ones) simply return None: trains cover India only.
+        """
+        code = self.resolve_station_code(city)
+        if code:
+            return code
+        key = " ".join(city.split(",")[0].strip().lower().split())
+        if not key:
+            return None
+        try:
+            stations, _ = await self.find_stations(key, 10)
+        except Exception:
+            return None
+        for s in stations:
+            if (s.get("city") or "").strip().lower() == key:
+                return s["code"]
+        return None
 
     def parse_railradar_response(
         self,
@@ -184,16 +317,22 @@ class RailService:
         from_city: str,
         to_city: str,
         date_str: str,
-        currency: str = "INR"
+        currency: str = "INR",
+        from_code: Optional[str] = None,
+        to_code: Optional[str] = None,
     ) -> Tuple[List[TransportOption], Optional[str]]:
-        """Searches trains for route and date. Returns (options, notice)."""
-        from_code = self.resolve_station_code(from_city)
-        to_code = self.resolve_station_code(to_city)
+        """Searches trains for route and date. Returns (options, notice).
 
-        if not from_code:
-            return [], f"Railway station code for '{from_city}' could not be identified."
-        if not to_code:
-            return [], f"Railway station code for '{to_city}' could not be identified."
+        from_code / to_code are the stations the traveller picked; without them the
+        city name is matched against the built-in station list.
+        """
+        from_code = from_code or await self.resolve_station_code_live(from_city)
+        to_code = to_code or await self.resolve_station_code_live(to_city)
+
+        for city, code in ((from_city, from_code), (to_city, to_code)):
+            if not code:
+                return [], (f"No Indian railway station found for '{city.strip()}'. "
+                            "Train search covers stations in India only.")
 
         try:
             data = await self.client.get_trains_between_stations(from_code, to_code, date_str)

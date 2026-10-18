@@ -30,6 +30,14 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field("", max_length=300)
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str = Field("", max_length=300)
+
+
+class GuestStartRequest(BaseModel):
+    captcha_token: Optional[str] = None
+
+
 class UserPublic(BaseModel):
     id: str
     username: str
@@ -45,3 +53,4 @@ class MeResponse(BaseModel):
     authenticated: bool
     user: Optional[UserPublic] = None
     accounts_available: bool = True
+    guest: bool = False

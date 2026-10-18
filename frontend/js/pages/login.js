@@ -122,7 +122,7 @@ function showRecoveryCode(code, username, thenGoTo) {
     }
   };
   $("btnDownloadCode").onclick = () => {
-    const text = `Smart Local Guide recovery code\nUsername: ${username}\nRecovery code: ${code}\n\nKeep this file private. It is the only way to reset your password.\n`;
+    const text = `AI Powered Travel Companion recovery code\nUsername: ${username}\nRecovery code: ${code}\n\nKeep this file private. It is the only way to reset your password.\n`;
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
     const a = document.createElement("a");
     a.href = url;

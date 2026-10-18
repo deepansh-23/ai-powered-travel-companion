@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Door-to-Door Itinerary Planner — Smart Local Guide</title>
+  <title>Door-to-Door Itinerary Planner — AI Powered Travel Companion</title>
   <meta name="description" content="Door-to-door trip planner with SerpApi Google Flights, RailRadar trains, SerpApi Google Hotels price comparison, and time-aware local itineraries.">
 
   <!-- Google Fonts -->
@@ -18,16 +18,16 @@
   <link rel="stylesheet" href="../css/pages.css">
   <link rel="stylesheet" href="../css/responsive.css">
 </head>
-<body data-requires-login>
+<body data-requires-session>
   <div class="app-wrapper">
     <!-- Navbar (Section 26) -->
     <header class="app-navbar" role="banner">
       <div class="navbar-inner">
-        <a href="../index.html" class="brand-link" aria-label="Smart Local Guide Home">
+        <a href="../index.html" class="brand-link" aria-label="AI Powered Travel Companion Home">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
-          <span>Smart Local Guide</span>
+          <span class="brand-text"><span class="brand-name">AI Powered Travel Companion</span><small class="brand-tagline">Explore Your City with Intelligence and Ease</small></span>
         </a>
 
         <nav class="nav-links" aria-label="Main Navigation">
@@ -104,15 +104,15 @@
       <div class="planner-steps-bar" role="navigation" aria-label="Trip planning steps" style="display:flex;gap:8px;margin-bottom:var(--space-lg);overflow-x:auto;padding-bottom:6px;">
         <div class="planner-step-badge active" id="stepBadge1">1. Route & Dates</div>
         <div class="planner-step-badge" id="stepBadge2">2. Transport Selection</div>
-        <div class="planner-step-badge" id="stepBadge3">3. Hotel Selection</div>
-        <div class="planner-step-badge" id="stepBadge4">4. Local Preferences</div>
+        <div class="planner-step-badge" id="stepBadge3">3. Local Preferences</div>
+        <div class="planner-step-badge" id="stepBadge4">4. Choose Hotels</div>
         <div class="planner-step-badge" id="stepBadge5">5. Final Itinerary</div>
       </div>
 
       <!-- STEP 1: Route, Dates & Transport Search Form (Sections 3, 4, 5) -->
       <div class="itinerary-form-card" id="step1Card">
         <h2 style="font-size:1.25rem;font-family:var(--font-heading);margin-bottom:14px;color:var(--color-text-primary);">
-          1. Trip Origin, Destination & Dates
+          1. Trip Origin, Destination &amp; Dates
         </h2>
         <form id="transportSearchForm" class="itinerary-grid-form">
           <div class="form-group">
@@ -121,8 +121,8 @@
           </div>
 
           <div class="form-group">
-            <label for="itineraryDest" class="form-label">Destination City</label>
-            <input type="text" id="itineraryDest" class="form-input" placeholder="e.g. Amritsar, Goa, Jaipur..." required>
+            <label for="itineraryDest" class="form-label">Destination (city, state or country)</label>
+            <input type="text" id="itineraryDest" class="form-input" placeholder="e.g. Amritsar, Kerala, Italy..." required>
           </div>
 
           <div class="form-group">
@@ -151,6 +151,44 @@
               <option value="no-preference">No Preference</option>
             </select>
           </div>
+
+          <div class="form-group">
+            <label for="itineraryRooms" class="form-label">Hotel rooms <span class="train-details-opt">(optional)</span></label>
+            <input type="number" id="itineraryRooms" class="form-input" min="1" max="10" placeholder="Auto: 1 room per 2 travellers">
+          </div>
+
+          <div id="scopePanel" class="scope-panel" style="grid-column: 1 / -1;" hidden></div>
+
+          <details class="train-details" id="trainDetails" style="grid-column: 1 / -1;">
+            <summary>🚆 Additional Details for Train Travel <span class="train-details-opt">(optional)</span></summary>
+            <div class="train-details-body">
+              <fieldset class="train-class-fieldset">
+                <legend class="form-label">Preferred train classes</legend>
+                <div class="train-class-grid" id="trainClassGrid">
+                  <label class="train-class-opt"><input type="checkbox" name="trainClass" value="SL"> Sleeper (SL)</label>
+                  <label class="train-class-opt"><input type="checkbox" name="trainClass" value="3A"> AC 3 Tier (3AC)</label>
+                  <label class="train-class-opt"><input type="checkbox" name="trainClass" value="2A"> AC 2 Tier (2AC)</label>
+                  <label class="train-class-opt"><input type="checkbox" name="trainClass" value="1A"> AC First Class (1AC)</label>
+                </div>
+              </fieldset>
+
+              <div class="train-station-row">
+                <div class="form-group">
+                  <label for="trainFromStation" class="form-label">Departure station</label>
+                  <select id="trainFromStation" class="form-select"><option value="">Automatic (main station of the city)</option></select>
+                </div>
+                <div class="form-group">
+                  <label for="trainToStation" class="form-label">Arrival station</label>
+                  <select id="trainToStation" class="form-select"><option value="">Automatic (main station of the city)</option></select>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnFindStations">🔎 Find stations in these cities</button>
+                <span class="train-details-hint" id="stationHint">Enter origin and destination above, then find the railway stations in each city.</span>
+              </div>
+              <p class="train-details-hint">Chosen classes are checked against each train. Fare and seat availability (Available / RAC / Waiting list) are shown only when the data source provides them; nothing is estimated.</p>
+            </div>
+          </details>
 
           <div style="grid-column: 1 / -1; margin-top: 8px;">
             <button type="submit" class="btn btn-primary" id="btnSearchTransport" style="width:100%;">
@@ -190,50 +228,39 @@
 
         <div style="display:flex;justify-content:flex-end;gap:12px;">
           <button type="button" class="btn btn-primary" id="btnProceedToHotels" disabled>
-            <span>Proceed to Hotel Selection &rarr;</span>
+            <span>Continue to Preferences &rarr;</span>
           </button>
         </div>
       </section>
 
       <!-- STEP 3: Hotel Search & Price Comparison Container (Section 7A) -->
-      <section id="step3Section" style="display:none;margin-bottom:var(--space-xl);" aria-label="Hotel Selection">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-          <div>
-            <h2 style="font-size:1.35rem;font-family:var(--font-heading);color:var(--color-text-primary);">
-              3. Choose Accommodation (SerpApi Google Hotels)
-            </h2>
-            <p style="font-size:0.9rem;color:var(--color-text-muted);">Compare real prices across booking sites or skip to continue without hotel.</p>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <select id="hotelSortSelect" class="form-select" style="font-size:0.85rem;padding:6px 10px;">
-              <option value="relevance">Sort: Recommended</option>
-              <option value="lowest_price">Sort: Lowest Price</option>
-              <option value="highest_rating">Sort: Highest Rating</option>
-              <option value="most_reviewed">Sort: Most Reviewed</option>
-            </select>
-            <button type="button" class="btn btn-secondary btn-sm" id="btnSkipHotel">
-              <span>Skip Hotel Selection</span>
-            </button>
-          </div>
+      <section id="step3Section" style="display:none;margin-bottom:var(--space-xl);" aria-label="Choose where to stay">
+        <div style="margin-bottom:12px;">
+          <h2 style="font-size:1.35rem;font-family:var(--font-heading);color:var(--color-text-primary);">
+            4. Choose Where to Stay
+          </h2>
+          <p style="font-size:0.95rem;color:var(--color-text-muted);">
+            Your plan is ready. Pick a hotel for each stay, close to the places you will visit those days, so you spend less time travelling.
+          </p>
         </div>
 
-        <div id="hotelListContainer" class="cards-grid" style="margin-bottom:var(--space-lg);"></div>
+        <div id="stayNotices"></div>
+        <div id="stayBlocksContainer"></div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <button type="button" class="btn btn-secondary" id="btnBackToTransport">
-            <span>&larr; Back to Transport</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" id="btnBackToPrefsFromHotels">
+            <span>&larr; Back to Preferences</span>
           </button>
-          <button type="button" class="btn btn-primary" id="btnProceedToLocalPrefs">
-            <span id="hotelProceedLabel">Continue with Selected Hotel &rarr;</span>
+          <button type="button" class="btn btn-primary" id="btnFinalizeItinerary">
+            <span>Create Final Itinerary &rarr;</span>
           </button>
         </div>
       </section>
 
-      <!-- STEP 4: Local Itinerary Preferences Card (Sections 12, 13) -->
       <section id="step4Section" style="display:none;margin-bottom:var(--space-xl);" aria-label="Local Itinerary Preferences">
         <div class="itinerary-form-card">
           <h2 style="font-size:1.3rem;font-family:var(--font-heading);margin-bottom:12px;color:var(--color-text-primary);">
-            4. Local Trip Preferences & Activities
+            3. Local Trip Preferences &amp; Activities
           </h2>
           <form id="localPrefsForm" class="itinerary-grid-form">
             <!-- Budget Control -->
@@ -352,11 +379,11 @@
 
             <div style="grid-column: 1 / -1; margin-top: 10px; display:flex; justify-content:space-between; gap:12px;">
               <button type="button" class="btn btn-secondary" id="btnBackToHotels">
-                <span>&larr; Back to Hotels</span>
+                <span>&larr; Back to Transport</span>
               </button>
               <button type="submit" class="btn btn-primary" id="btnGenerateItinerary">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                <span>Generate Door-to-Door Itinerary</span>
+                <span>Generate My Itinerary</span>
               </button>
             </div>
           </form>
@@ -378,7 +405,7 @@
     <footer class="app-footer" role="contentinfo">
       <div class="footer-inner">
         <div>
-          <strong>Smart Local Guide</strong> — Door-to-Door Trip Planner
+          <strong>AI Powered Travel Companion</strong> — Door-to-Door Trip Planner
           <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:2px;">Built with HTML5, CSS3, Vanilla JS & FastAPI.</p>
         </div>
         <ul class="footer-links">

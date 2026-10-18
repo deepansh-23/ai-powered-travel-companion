@@ -1,5 +1,5 @@
 /**
- * Smart Local Guide - State Management
+ * AI Powered Travel Companion - State Management
  * Single source of truth for UI state, active filters, selection, and theme.
  */
 

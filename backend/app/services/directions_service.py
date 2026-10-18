@@ -151,8 +151,23 @@ def build_leg(origin: _Point, dest: _Point, preference: str) -> Dict[str, Any]:
   }
 
 
-def enrich_itinerary(response: Any, req: Any, verified_places: Optional[List[Dict[str, Any]]]) -> None:
-  """Adds coordinates + `directions` to every stop of an ItineraryResponse, in place."""
+def _hotel_point(hotel: Any) -> Optional[_Point]:
+  if isinstance(hotel, dict) and hotel.get("name"):
+    return _Point(hotel["name"], hotel.get("address"), hotel.get("latitude"), hotel.get("longitude"))
+  return None
+
+
+def enrich_itinerary(
+    response: Any,
+    req: Any,
+    verified_places: Optional[List[Dict[str, Any]]],
+    hotels_by_day: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> None:
+  """Adds coordinates + `directions` to every stop of an ItineraryResponse, in place.
+
+  hotels_by_day maps day_number -> hotel when the trip has several stays; the first stop of each
+  day then starts from that day's hotel.
+  """
   places = verified_places or []
   preference = getattr(req, "transportation", "public")
 
@@ -171,8 +186,8 @@ def enrich_itinerary(response: Any, req: Any, verified_places: Optional[List[Dic
     name = getattr(item, "name", "") or ""
     address = getattr(item, "address", None)
     match = _lookup(name, address, places)
-    lat = match.get("latitude") if match else None
-    lon = match.get("longitude") if match else None
+    lat = match.get("latitude") if match else getattr(item, "latitude", None)
+    lon = match.get("longitude") if match else getattr(item, "longitude", None)
     if match:
       item.latitude, item.longitude = lat, lon
     point = _Point(name, address or (match.get("address") if match else None), lat, lon)
@@ -181,7 +196,10 @@ def enrich_itinerary(response: Any, req: Any, verified_places: Optional[List[Dic
     return point
 
   for day in response.days:
-    if hotel_point is not None:
+    day_hotel = _hotel_point((hotels_by_day or {}).get(day.day_number)) if hotels_by_day else None
+    if day_hotel is not None:
+      origin = day_hotel
+    elif hotel_point is not None and not hotels_by_day:
       origin = hotel_point
     elif day.day_number == 1 and arrival_point is not None:
       origin = arrival_point

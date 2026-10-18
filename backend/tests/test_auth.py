@@ -9,13 +9,14 @@ from unittest.mock import AsyncMock, patch
 
 from app.config import settings
 from app.main import app
-from app.security import require_user
+from app.security import require_user, require_user_or_guest
 
 
 @pytest.fixture(autouse=True)
 def _real_login_required():
     """Undo the 'always logged in' default from conftest: these tests use real sessions."""
     app.dependency_overrides.pop(require_user, None)
+    app.dependency_overrides.pop(require_user_or_guest, None)
     yield
 
 
@@ -42,7 +43,7 @@ def test_register_logs_in_and_shows_recovery_code_once(client):
     assert settings.AUTH_COOKIE_NAME in cookie and "HttpOnly" in cookie and "SameSite=lax" in cookie
 
     me = client.get("/api/auth/me").json()
-    assert me == {"authenticated": True, "user": me["user"], "accounts_available": True}
+    assert me == {"authenticated": True, "user": me["user"], "accounts_available": True, "guest": False}
     assert me["user"]["username"] == "alice"
 
 
@@ -325,3 +326,64 @@ def test_saved_session_validation_and_limit(client):
     assert r.status_code == 409 and "Delete one first" in r.json()["detail"]
     # other services have their own allowance
     assert client.post("/api/sessions", json={"service": "places", "title": "p", "state": {}}).status_code == 200
+
+
+# ------------------------------------------------------------------ guest sessions
+def test_guest_session_unlocks_planner_but_not_personal_features(client):
+    # no login, no guest cookie: planner is blocked
+    assert client.post("/api/transport/search", json={}).status_code == 401
+    me = client.get("/api/auth/me").json()
+    assert me["guest"] is False and me["authenticated"] is False
+
+    r = client.post("/api/auth/guest", json={})
+    assert r.status_code == 200 and settings.GUEST_COOKIE_NAME in r.headers["set-cookie"]
+    assert "HttpOnly" in r.headers["set-cookie"]
+    me = client.get("/api/auth/me").json()
+    assert me["guest"] is True and me["authenticated"] is False and me["user"] is None
+
+    # planner tools now pass the guard (an empty body is a 422 validation error, not a 401)
+    assert client.post("/api/transport/search", json={}).status_code == 422
+    # personal features stay login-only
+    assert client.get("/api/history").status_code == 401
+    assert client.get("/api/sessions").status_code == 401
+    assert client.post("/api/feedback", json={"rating": 5, "comment": "hello there", "service_used": "Area Guide"}).status_code == 401
+
+
+def test_forged_or_expired_guest_cookie_is_rejected(client):
+    from app.security import is_valid_guest_token, issue_guest_token
+    good = issue_guest_token()
+    assert is_valid_guest_token(good)
+    assert not is_valid_guest_token(good[:-4] + "0000")
+    assert not is_valid_guest_token("9999999999.abc.deadbeef")
+    assert not is_valid_guest_token("1.abc." + good.split(".")[2])  # expired / wrong payload
+    client.cookies.set(settings.GUEST_COOKIE_NAME, "9999999999.abc.deadbeef")
+    assert client.post("/api/transport/search", json={}).status_code == 401
+
+
+def test_logout_ends_guest_session(client):
+    client.post("/api/auth/guest", json={})
+    assert client.get("/api/auth/me").json()["guest"] is True
+    assert client.post("/api/auth/logout").status_code == 200
+    assert client.get("/api/auth/me").json()["guest"] is False
+
+
+# ------------------------------------------------------------------ delete account
+def test_delete_account_needs_correct_password_then_removes_everything(client):
+    _register(client)
+    client.post("/api/history", json={"feature_type": "itinerary", "title": "T", "preview": "p", "payload": {}})
+    client.post("/api/sessions", json={"service": "itinerary", "title": "draft", "state": {}})
+
+    wrong = client.post("/api/auth/delete-account", json={"password": "not my password"})
+    assert wrong.status_code == 401 and "not deleted" in wrong.json()["detail"]
+    assert client.get("/api/auth/me").json()["authenticated"] is True  # still there
+
+    ok = client.post("/api/auth/delete-account", json={"password": "correct horse 42"})
+    assert ok.status_code == 200 and ok.json()["status"] == "account_deleted"
+    assert client.get("/api/auth/me").json()["authenticated"] is False
+    # the account is really gone: logging in fails and the username is free again
+    assert client.post("/api/auth/login", json={"username": "alice", "password": "correct horse 42"}).status_code == 401
+    assert _register(client).status_code == 201
+
+
+def test_delete_account_requires_login(client):
+    assert client.post("/api/auth/delete-account", json={"password": "x"}).status_code == 401

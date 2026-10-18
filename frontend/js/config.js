@@ -1,5 +1,5 @@
 /**
- * Smart Local Guide - Public Frontend Configuration
+ * AI Powered Travel Companion - Public Frontend Configuration
  * Contains non-secret settings only (Section 50.3 & 50.12).
  * Never contains secret API keys.
  */

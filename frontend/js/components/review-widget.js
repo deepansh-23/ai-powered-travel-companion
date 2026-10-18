@@ -116,7 +116,7 @@ function buildPanel() {
   panel.setAttribute("aria-label", "Write a review");
   panel.innerHTML = `
     <div class="review-panel-head">
-      <h2>Rate Smart Local Guide</h2>
+      <h2>Rate AI Powered Travel Companion</h2>
       <button type="button" class="review-panel-close" aria-label="Close review window">&times;</button>
     </div>
     <div class="review-panel-body" id="rpLoginNote" hidden style="text-align:center;">
@@ -261,7 +261,7 @@ async function loadHomeTopReviews() {
     const top = general.slice(0, 3);
     grid.innerHTML = top.length
       ? top.map(r => renderReviewCard(r)).join("")
-      : `<div class="empty-state"><p>No reviews yet. Be the first to rate Smart Local Guide!</p></div>`;
+      : `<div class="empty-state"><p>No reviews yet. Be the first to rate AI Powered Travel Companion!</p></div>`;
   } catch (_) {
     grid.innerHTML = `<div class="empty-state"><p>Reviews could not be loaded right now.</p></div>`;
   }

@@ -87,6 +87,10 @@ export function initSavedSessions({ service, saveButtonId, hasActiveState, build
 
   if (button) {
     button.addEventListener("click", async () => {
+      if (authManager.isGuest()) {
+        toast.info("Saving sessions needs a free account (not available in guest mode). Log in to save your work.");
+        return;
+      }
       if (!authManager.isLoggedIn()) {
         toast.info("Please log in to save your session.");
         setTimeout(() => authManager.goToLogin(), 700);

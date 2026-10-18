@@ -1,6 +1,8 @@
 """Account routes: register, login, logout, me, recover, change password."""
 
-from typing import Optional
+import time
+from collections import defaultdict
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,13 +11,31 @@ from app.config import settings
 from app.db import db_status, get_db
 from app.db_models import User
 from app.models.auth import (
-    AuthResponse, ChangePasswordRequest, LoginRequest, MeResponse, RecoverRequest, RegisterRequest, UserPublic,
+    AuthResponse, ChangePasswordRequest, DeleteAccountRequest, GuestStartRequest, LoginRequest, MeResponse,
+    RecoverRequest, RegisterRequest, UserPublic,
 )
-from app.security import get_current_user_optional, require_same_origin, require_user
+from app.security import (
+    get_current_user_optional, is_valid_guest_token, issue_guest_token, require_same_origin, require_user,
+)
 from app.services import auth_service
 from app.services.captcha_service import captcha_service
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"], dependencies=[Depends(require_same_origin)])
+
+
+_guest_starts: Dict[str, List[float]] = defaultdict(list)
+
+
+def _guest_rate_limited(ip: str) -> bool:
+    """At most GUEST_MAX_STARTS_PER_HOUR_PER_IP new guest sessions per IP per hour."""
+    now = time.time()
+    recent = [t for t in _guest_starts[ip] if now - t < 3600]
+    if len(recent) >= settings.GUEST_MAX_STARTS_PER_HOUR_PER_IP:
+        _guest_starts[ip] = recent
+        return True
+    recent.append(now)
+    _guest_starts[ip] = recent
+    return False
 
 
 def _client_ip(request: Request) -> str:
@@ -55,15 +75,39 @@ def _fail(exc: auth_service.AuthError) -> HTTPException:
 
 @router.get("/me", response_model=MeResponse)
 async def me(request: Request):
-    """Who is logged in? Always 200, so pages can check quietly."""
+    """Who is logged in (or is this a guest)? Always 200, so pages can check quietly."""
+    guest = is_valid_guest_token(request.cookies.get(settings.GUEST_COOKIE_NAME))
     info = db_status()
     if not info["ready"]:
-        return MeResponse(authenticated=False, accounts_available=False)
+        return MeResponse(authenticated=False, accounts_available=False, guest=guest)
     from app.db import get_db as _gd  # open a short-lived session without raising 503
     async for db in _gd():
         user = await auth_service.get_user_for_token(db, request.cookies.get(settings.AUTH_COOKIE_NAME))
-        return MeResponse(authenticated=user is not None, user=_public(user) if user else None)
-    return MeResponse(authenticated=False)
+        return MeResponse(
+            authenticated=user is not None,
+            user=_public(user) if user else None,
+            guest=guest and user is None,
+        )
+    return MeResponse(authenticated=False, guest=guest)
+
+
+@router.post("/guest")
+async def start_guest(req: GuestStartRequest, request: Request, response: Response):
+    """Start a guest session: planning tools work, nothing is saved to an account."""
+    ip = _client_ip(request)
+    if _guest_rate_limited(ip):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many guest sessions from this network. Please try again later.")
+    await _check_captcha(req.captcha_token, ip)
+    response.set_cookie(
+        settings.GUEST_COOKIE_NAME,
+        issue_guest_token(),
+        max_age=settings.GUEST_SESSION_HOURS * 3600,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https",
+        path="/",
+    )
+    return {"status": "guest_started", "guest": True}
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -93,9 +137,18 @@ async def login(req: LoginRequest, request: Request, response: Response, db: Asy
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
-    await auth_service.end_session(db, request.cookies.get(settings.AUTH_COOKIE_NAME))
+async def logout(request: Request, response: Response):
+    """Ends a login session and/or a guest session. Works even if the database is down."""
+    raw = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if raw:
+        from app.db import get_db as _gd
+        try:
+            async for db in _gd():
+                await auth_service.end_session(db, raw)
+        except HTTPException:
+            pass  # accounts DB unavailable: cookies are still cleared below
     response.delete_cookie(settings.AUTH_COOKIE_NAME, path="/")
+    response.delete_cookie(settings.GUEST_COOKIE_NAME, path="/")
     return {"status": "logged_out"}
 
 
@@ -120,3 +173,16 @@ async def change_password(req: ChangePasswordRequest, user: User = Depends(requi
     except auth_service.AuthError as exc:
         raise _fail(exc)
     return {"status": "password_changed"}
+
+
+@router.post("/delete-account")
+async def delete_account(req: DeleteAccountRequest, response: Response, user: User = Depends(require_user),
+                         db: AsyncSession = Depends(get_db)):
+    """Permanently delete the logged-in account (password required)."""
+    try:
+        await auth_service.delete_account(db, user, req.password)
+    except auth_service.AuthError as exc:
+        raise _fail(exc)
+    response.delete_cookie(settings.AUTH_COOKIE_NAME, path="/")
+    response.delete_cookie(settings.GUEST_COOKIE_NAME, path="/")
+    return {"status": "account_deleted"}

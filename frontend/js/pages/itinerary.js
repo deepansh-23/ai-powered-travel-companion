@@ -10,6 +10,22 @@ import { escapeHtml, titleCase } from "../utils/formatters.js";
 import { announceServiceReady, announceServiceReset } from "../components/review-widget.js";
 import { authManager } from "../components/auth.js";
 import { initSavedSessions, forgetDraft } from "../components/saved-sessions.js";
+import {
+  stationOptionsHtml,
+  buildDateStripHtml,
+  buildFareAvailabilityHtml,
+  buildTrainAdviceHtml,
+  buildQuickVersionHtml,
+  buildBudgetSummaryHtml,
+  buildBudgetBreakdownHtml,
+  buildDidYouMeanHtml,
+  buildScopePanelHtml,
+  scopeCountText,
+  buildStayBlockHtml,
+  buildTransfersHtml,
+  buildStaysSummaryHtml
+} from "./itinerary-extras.js";
+import { attachPlaceAutocomplete } from "../components/place-autocomplete.js";
 
 const DEFAULT_CUISINES = [
   "Local Street Food", "Indian", "North Indian / Mughlai", "South Indian",
@@ -45,6 +61,29 @@ class ItineraryPlannerController {
     this.selectedHotel = null;
     this.hotelSkipped = false;
 
+    // Where the trip goes: city / state / country questions and the places to stay in
+    this.scopeInfo = null;
+    this.scopeFor = "";
+    this.scopeState = { mode: "", selected: [], neighbourSelected: [], arrival: "" };
+    this.transportDestination = "";
+    this.rooms = null;
+    this.prefs = {};
+
+    // Plan without hotels, then one hotel per stay
+    this.skeleton = null;
+    this.stayHotels = {};
+    this.stayChoices = {};
+
+    // Optional train details (classes + exact stations)
+    this.trainClasses = [];
+    this.fromStationCode = "";
+    this.toStationCode = "";
+    this.stations = { from: [], to: [] };
+
+    // Nearby-date price strips (cached so a page reload does not spend API calls again)
+    this.dateStrips = { outbound: null, return: null };
+    this._stripSeq = { outbound: 0, return: 0 };
+
     // Local preferences & Final plan state
     this.finalItinerary = null;
     this.isGenerating = false;
@@ -56,6 +95,10 @@ class ItineraryPlannerController {
     this.initChipSelection();
     this.initTagPickers();
     this.attachEventListeners();
+    this.initTrainDetails();
+    attachPlaceAutocomplete(document.getElementById("itinerarySource"));
+    attachPlaceAutocomplete(document.getElementById("itineraryDest"));
+    this.initScope();
     this.restoreSessionState();
     initSavedSessions({
       service: "itinerary",
@@ -98,12 +141,16 @@ class ItineraryPlannerController {
     // "Rate this service" appears only while the finished itinerary is on screen
     if (stepNum === 5 && this.finalItinerary) announceServiceReady("Itinerary Planner");
     else announceServiceReset("Itinerary Planner");
+    // Screens are numbered by page section (3 = hotels, 4 = preferences) but the visitor now meets
+    // preferences first, so the progress badges follow the order they are actually shown in.
+    const position = { 1: 1, 2: 2, 4: 3, 3: 4, 5: 5 };
+    const here = position[stepNum] || stepNum;
     for (let i = 1; i <= 5; i++) {
       const badge = document.getElementById(`stepBadge${i}`);
       if (!badge) continue;
       badge.classList.remove("active", "completed");
-      if (i === stepNum) badge.classList.add("active");
-      else if (i < stepNum) badge.classList.add("completed");
+      if (i === here) badge.classList.add("active");
+      else if (i < here) badge.classList.add("completed");
     }
 
     const s1 = document.getElementById("step1Card");
@@ -136,53 +183,17 @@ class ItineraryPlannerController {
       });
     }
 
-    // 2. Step 2: Proceed to Hotels
+    // 2. Step 2: continue to preferences
     const btnProceedToHotels = document.getElementById("btnProceedToHotels");
     if (btnProceedToHotels) {
-      btnProceedToHotels.addEventListener("click", () => {
-        this.handleProceedToHotels();
-      });
+      btnProceedToHotels.addEventListener("click", () => this.setStep(4));
     }
 
-    // 3. Step 3: Hotel Controls
-    const btnSkipHotel = document.getElementById("btnSkipHotel");
-    if (btnSkipHotel) {
-      btnSkipHotel.addEventListener("click", () => {
-        this.selectedHotel = null;
-        this.hotelSkipped = true;
-        this.setStep(4);
-      });
-    }
-
-    const btnBackToTransport = document.getElementById("btnBackToTransport");
-    if (btnBackToTransport) {
-      btnBackToTransport.addEventListener("click", () => {
-        this.setStep(2);
-      });
-    }
-
-    const btnProceedToLocalPrefs = document.getElementById("btnProceedToLocalPrefs");
-    if (btnProceedToLocalPrefs) {
-      btnProceedToLocalPrefs.addEventListener("click", () => {
-        this.setStep(4);
-      });
-    }
-
-    const hotelSortSelect = document.getElementById("hotelSortSelect");
-    if (hotelSortSelect) {
-      hotelSortSelect.addEventListener("change", () => {
-        this.searchHotels();
-      });
-    }
-
-    // 4. Step 4: Back to Hotels & Generate Final Itinerary
+    // 3. Preferences: back to transport, generate the plan (hotels come next)
     const btnBackToHotels = document.getElementById("btnBackToHotels");
     if (btnBackToHotels) {
-      btnBackToHotels.addEventListener("click", () => {
-        this.setStep(3);
-      });
+      btnBackToHotels.addEventListener("click", () => this.setStep(2));
     }
-
     const localPrefsForm = document.getElementById("localPrefsForm");
     if (localPrefsForm) {
       localPrefsForm.addEventListener("submit", (e) => {
@@ -190,6 +201,12 @@ class ItineraryPlannerController {
         this.handleGenerateFinalItinerary();
       });
     }
+
+    // 4. Hotels per stay: back, finish
+    const btnBackToPrefs = document.getElementById("btnBackToPrefsFromHotels");
+    if (btnBackToPrefs) btnBackToPrefs.addEventListener("click", () => this.setStep(4));
+    const btnFinalize = document.getElementById("btnFinalizeItinerary");
+    if (btnFinalize) btnFinalize.addEventListener("click", () => this.handleFinalize());
 
     // Generate New Trip control (Section 20)
     const btnGenerateNewTrip = document.getElementById("btnGenerateNewTrip");
@@ -208,6 +225,14 @@ class ItineraryPlannerController {
     this.selectedHotel = null;
     this.hotelSkipped = false;
     this.finalItinerary = null;
+    this.skeleton = null;
+    this.stayHotels = {};
+    this.stayChoices = {};
+    this.scopeInfo = null;
+    this.scopeFor = "";
+    this.scopeState = { mode: "", selected: [], neighbourSelected: [], arrival: "" };
+    this.renderScopePanel();
+    this.dateStrips = { outbound: null, return: null };
     this.setStep(1);
     toast.info("Started new trip planning.");
   }
@@ -228,6 +253,8 @@ class ItineraryPlannerController {
     this.returnDate = retInput ? retInput.value : "";
     this.travelers = travelersInput ? parseInt(travelersInput.value, 10) : 1;
     this.preference = prefSelect ? prefSelect.value : "best-overall";
+    const roomsInput = document.getElementById("itineraryRooms");
+    this.rooms = roomsInput && roomsInput.value ? parseInt(roomsInput.value, 10) : null;
 
     if (!this.source || !this.destination) {
       toast.error("Please enter both origin and destination cities.");
@@ -239,6 +266,12 @@ class ItineraryPlannerController {
       return;
     }
 
+    this.readTrainPreferences();
+
+    // City, state or country? A big place needs a few questions first (where to land, what to visit)
+    if (!(await this.ensureScope())) return;
+    this.transportDestination = this.transportCity();
+
     const btn = document.getElementById("btnSearchTransport");
     const origBtnHtml = btn ? btn.innerHTML : "";
     if (btn) {
@@ -247,17 +280,21 @@ class ItineraryPlannerController {
     }
 
     try {
-      toast.info(`Searching outbound and return transport (${this.source} ↔ ${this.destination})…`);
+      toast.info(`Searching outbound and return transport (${this.source} ↔ ${this.transportDestination})…`);
       const payload = {
         source: this.source,
-        destination: this.destination,
+        destination: this.transportDestination,
         outbound_date: this.outboundDate,
         return_date: this.returnDate,
         travelers: this.travelers,
         preference: this.preference,
-        currency: "INR"
+        currency: "INR",
+        train_classes: this.trainClasses,
+        source_station_code: this.fromStationCode || null,
+        destination_station_code: this.toStationCode || null
       };
 
+      this.dateStrips = { outbound: null, return: null };
       this.transportData = await api.searchTransport(payload);
 
       // Render outbound and return transport options
@@ -285,12 +322,16 @@ class ItineraryPlannerController {
     }
   }
 
-  renderTransportLeg(legType, legData) {
+  renderTransportLeg(legType, legData, { fetchStrip = true } = {}) {
     const container = document.getElementById(`${legType}TransportList`);
     const statusSpan = document.getElementById(legType === "outbound" ? "selectedOutboundStatus" : "selectedReturnStatus");
     if (!container) return;
 
     container.innerHTML = "";
+
+    // Nearby dates (flight prices, green/orange/red) above the options of this leg
+    if (this.dateStrips[legType]) this.renderDateStrip(legType);
+    else if (fetchStrip) this.loadDateStrip(legType);
 
     const allOptions = [...(legData.flights || []), ...(legData.trains || [])];
 
@@ -302,9 +343,11 @@ class ItineraryPlannerController {
       container.innerHTML = `
         <div class="empty-state" style="padding:16px;">
           ${text.map(n => `<p>${escapeHtml(n)}</p>`).join("")}
-          <p style="font-size:0.85rem;color:var(--color-text-muted);">Check the spelling of the city names (for example "Bengaluru" or "Bangalore") and try again from step 1.</p>
+          <p style="font-size:0.85rem;color:var(--color-text-muted);">Check the spelling, or pick one of the suggestions below. You can also go back to step 1 and choose a nearby city.</p>
+          <div class="dym-slot" id="${legType}DidYouMean"></div>
         </div>
       `;
+      this.showDidYouMean(legType);
       return;
     }
 
@@ -313,6 +356,22 @@ class ItineraryPlannerController {
       info.style.cssText = "font-size:0.85rem;color:var(--color-text-secondary);margin-bottom:10px;";
       info.innerHTML = notices.map(n => `ℹ️ ${escapeHtml(n)}`).join("<br>");
       container.appendChild(info);
+    }
+
+    // Train recommendation from the real train data (AI summary or rule-based)
+    if (legData.train_advice) {
+      const adviceEl = document.createElement("div");
+      adviceEl.innerHTML = buildTrainAdviceHtml(legData.train_advice);
+      adviceEl.querySelectorAll(".train-pick-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const picked = allOptions.find(o => o.id === btn.dataset.optionId);
+          if (!picked) return;
+          this.selectTransportOption(legType, picked);
+          const el = document.getElementById(`transport-${picked.id}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      });
+      container.appendChild(adviceEl.firstElementChild || adviceEl);
     }
 
     allOptions.forEach(opt => {
@@ -334,7 +393,7 @@ class ItineraryPlannerController {
       }
 
       const priceText = opt.price
-        ? `₹${Math.round(opt.price).toLocaleString()}`
+        ? `₹${Math.round(opt.price).toLocaleString("en-IN")}`
         : (isFlight ? "Price N/A" : "Fare not provided");
 
       card.innerHTML = `
@@ -363,10 +422,12 @@ class ItineraryPlannerController {
 
         ${opt.recommendation_reason ? `<div class="transport-reason-note">${escapeHtml(opt.recommendation_reason)}</div>` : ""}
 
+        ${!isFlight ? buildFareAvailabilityHtml(opt.fare_availability) : ""}
+
         <div class="transport-price-row">
           <div>
             <div class="transport-price-val">${priceText}</div>
-            <div class="transport-price-sub">Live Quote / Traveller</div>
+            <div class="transport-price-sub">${opt.price ? "per person · live quote" : (isFlight ? "per person" : "per person · not provided by the data source")}</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
             ${bookingBtn}
@@ -398,6 +459,234 @@ class ItineraryPlannerController {
     }
   }
 
+  /** When nothing can be found for a place, offer the closest real places as one-click choices. */
+  async showDidYouMean(legType) {
+    const slot = document.getElementById(`${legType}DidYouMean`);
+    if (!slot) return;
+    const route = this.legRoute(legType);
+    // field ids always refer to the form: origin is the Source field on the outbound leg only
+    const fieldOf = (isOrigin) => ((legType === "outbound") === isOrigin ? "itinerarySource" : "itineraryDest");
+    const asks = [
+      { typed: route.origin, field: fieldOf(true) },
+      { typed: route.destination, field: fieldOf(false) }
+    ];
+    try {
+      const groups = await Promise.all(asks.map(async (a) => {
+        const res = await api.suggestPlaces(a.typed);
+        const items = (res.suggestions || []).filter(x => x.label.toLowerCase() !== a.typed.toLowerCase()).slice(0, 4);
+        return { ...a, items };
+      }));
+      slot.innerHTML = buildDidYouMeanHtml(groups);
+      slot.querySelectorAll(".dym-chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+          const input = document.getElementById(chip.dataset.field);
+          if (input) input.value = chip.dataset.value;
+          this.handleTransportSearch();
+        });
+      });
+    } catch (_) { /* suggestions are optional */ }
+  }
+
+  // --- Optional train details: classes + exact stations ---
+
+  initTrainDetails() {
+    const details = document.getElementById("trainDetails");
+    const findBtn = document.getElementById("btnFindStations");
+    if (findBtn) findBtn.addEventListener("click", () => this.findStations());
+    if (details) {
+      details.addEventListener("toggle", () => {
+        const both = document.getElementById("itinerarySource")?.value.trim() && document.getElementById("itineraryDest")?.value.trim();
+        if (details.open && both && !this.stations.from.length && !this.stations.to.length) this.findStations();
+      });
+    }
+    // New cities mean new stations
+    ["itinerarySource", "itineraryDest"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("change", () => this.clearStations(id === "itinerarySource" ? "from" : "to"));
+    });
+    this.applyTrainPreferencesToForm();
+  }
+
+  clearStations(which) {
+    this.stations[which] = [];
+    if (which === "from") this.fromStationCode = "";
+    else this.toStationCode = "";
+    const sel = document.getElementById(which === "from" ? "trainFromStation" : "trainToStation");
+    if (sel) sel.innerHTML = stationOptionsHtml([]);
+  }
+
+  readTrainPreferences() {
+    this.trainClasses = Array.from(document.querySelectorAll('input[name="trainClass"]:checked')).map(i => i.value);
+    const from = document.getElementById("trainFromStation");
+    const to = document.getElementById("trainToStation");
+    this.fromStationCode = from ? from.value : "";
+    this.toStationCode = to ? to.value : "";
+  }
+
+  applyTrainPreferencesToForm() {
+    document.querySelectorAll('input[name="trainClass"]').forEach(i => { i.checked = this.trainClasses.includes(i.value); });
+    const from = document.getElementById("trainFromStation");
+    const to = document.getElementById("trainToStation");
+    if (from) from.innerHTML = stationOptionsHtml(this.stations.from, this.fromStationCode);
+    if (to) to.innerHTML = stationOptionsHtml(this.stations.to, this.toStationCode);
+    const details = document.getElementById("trainDetails");
+    if (details && (this.trainClasses.length || this.fromStationCode || this.toStationCode)) details.open = true;
+  }
+
+  async findStations() {
+    const source = document.getElementById("itinerarySource")?.value.trim() || "";
+    const dest = document.getElementById("itineraryDest")?.value.trim() || "";
+    const hint = document.getElementById("stationHint");
+    const btn = document.getElementById("btnFindStations");
+    if (!source || !dest) {
+      if (hint) hint.textContent = "Enter both the origin and the destination city first.";
+      return;
+    }
+    if (btn) btn.disabled = true;
+    if (hint) hint.textContent = "Looking up railway stations…";
+    try {
+      const [a, b] = await Promise.all([api.searchStations(source), api.searchStations(dest)]);
+      this.stations.from = a.stations || [];
+      this.stations.to = b.stations || [];
+      const keepFrom = this.stations.from.some(s => s.code === this.fromStationCode) ? this.fromStationCode : "";
+      const keepTo = this.stations.to.some(s => s.code === this.toStationCode) ? this.toStationCode : "";
+      this.fromStationCode = keepFrom;
+      this.toStationCode = keepTo;
+      this.applyTrainPreferencesToForm();
+      const notes = [a.notice, b.notice].filter((n, i, arr) => n && arr.indexOf(n) === i);
+      if (hint) {
+        hint.textContent = notes.length
+          ? notes.join(" ")
+          : `Found ${this.stations.from.length} station(s) near ${source} and ${this.stations.to.length} near ${dest}. Pick the ones you prefer.`;
+      }
+    } catch (err) {
+      if (hint) hint.textContent = "Could not load stations: " + err.message;
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // --- Nearby dates (flights) ---
+
+  legDate(legType) {
+    return legType === "outbound" ? this.outboundDate : this.returnDate;
+  }
+
+  legRoute(legType) {
+    return legType === "outbound"
+      ? { origin: this.source, destination: this.transportDestination || this.destination, fromCode: this.fromStationCode, toCode: this.toStationCode }
+      : { origin: this.transportDestination || this.destination, destination: this.source, fromCode: this.toStationCode, toCode: this.fromStationCode };
+  }
+
+  ensureStripEl(legType) {
+    const list = document.getElementById(`${legType}TransportList`);
+    if (!list || !list.parentElement) return null;
+    let el = document.getElementById(`${legType}DateStrip`);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = `${legType}DateStrip`;
+      el.className = "date-strip";
+      list.parentElement.insertBefore(el, list);
+    }
+    return el;
+  }
+
+  async loadDateStrip(legType) {
+    const el = this.ensureStripEl(legType);
+    const date = this.legDate(legType);
+    if (!el || !date) { if (el) el.hidden = true; return; }
+    el.hidden = false;
+    const seq = ++this._stripSeq[legType];
+    el.innerHTML = `<div class="date-strip-loading">Checking flight prices for nearby dates…</div>`;
+    const route = this.legRoute(legType);
+    try {
+      const resp = await api.getFlightDatePrices({
+        origin: route.origin,
+        destination: route.destination,
+        date,
+        travelers: this.travelers,
+        currency: "INR",
+        earliest_date: legType === "return" ? (this.outboundDate || null) : null
+      });
+      if (seq !== this._stripSeq[legType]) return; // user already moved on
+      this.dateStrips[legType] = resp;
+      this.renderDateStrip(legType);
+      this.persistSessionState();
+    } catch (err) {
+      if (seq !== this._stripSeq[legType]) return;
+      el.innerHTML = `<div class="date-strip-empty">Nearby-date prices unavailable: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  renderDateStrip(legType) {
+    const el = this.ensureStripEl(legType);
+    const resp = this.dateStrips[legType];
+    if (!el || !resp) return;
+    el.hidden = false;
+    const isDisabled = (iso) => legType === "outbound"
+      ? !!(this.returnDate && iso > this.returnDate)
+      : !!(this.outboundDate && iso < this.outboundDate);
+    el.innerHTML = buildDateStripHtml(resp, isDisabled);
+    el.querySelectorAll(".date-chip:not([disabled])").forEach(chip => {
+      chip.addEventListener("click", () => this.switchLegDate(legType, chip.dataset.date));
+    });
+  }
+
+  async switchLegDate(legType, newDate) {
+    if (!newDate || newDate === this.legDate(legType)) return;
+    const list = document.getElementById(`${legType}TransportList`);
+    const route = this.legRoute(legType);
+    if (list) list.innerHTML = `<div class="empty-state" style="padding:16px;"><p>Searching flights and trains for ${escapeHtml(newDate)}…</p></div>`;
+    try {
+      const leg = await api.searchTransportLeg({
+        origin: route.origin,
+        destination: route.destination,
+        date: newDate,
+        travelers: this.travelers,
+        preference: this.preference,
+        currency: "INR",
+        train_classes: this.trainClasses,
+        origin_station_code: route.fromCode || null,
+        destination_station_code: route.toCode || null
+      });
+
+      if (legType === "outbound") {
+        this.outboundDate = newDate;
+        this.selectedOutbound = null;
+        this.transportData.outbound = leg;
+        const dep = document.getElementById("itineraryDepDate");
+        if (dep) dep.value = newDate;
+      } else {
+        this.returnDate = newDate;
+        this.selectedReturn = null;
+        this.transportData.return_leg = leg;
+        const ret = document.getElementById("itineraryRetDate");
+        if (ret) ret.value = newDate;
+      }
+
+      // Dates changed: an earlier hotel choice no longer matches
+      if (this.selectedHotel || this.hotelData.length) {
+        this.selectedHotel = null;
+        this.hotelData = [];
+        this.hotelSkipped = false;
+      }
+      this.dateStrips[legType] = null;
+      const badge = document.getElementById("transportRouteSummaryBadge");
+      if (badge) badge.textContent = `${this.source} → ${this.destination} (${this.outboundDate} to ${this.returnDate})`;
+
+      this.renderTransportLeg(legType, leg);
+      // The other leg's strip only needs its disabled dates refreshed
+      const other = legType === "outbound" ? "return" : "outbound";
+      if (this.dateStrips[other]) this.renderDateStrip(other);
+      this.persistSessionState();
+      toast.success(`Showing options for ${newDate}.`);
+    } catch (err) {
+      toast.error("Could not load that date: " + err.message);
+      const original = legType === "outbound" ? this.transportData.outbound : this.transportData.return_leg;
+      if (original) this.renderTransportLeg(legType, original, { fetchStrip: false });
+    }
+  }
+
   async showFlightBookingOptions(opt) {
     const raw = opt.raw_provider_data || {};
     modal.open({
@@ -414,12 +703,12 @@ class ItineraryPlannerController {
         return;
       }
       body.innerHTML = `
-        <p style="font-size:0.85rem;color:var(--color-text-muted);">You will leave Smart Local Guide to book on the provider's site. No payment is taken here. Prices can change.</p>
+        <p style="font-size:0.85rem;color:var(--color-text-muted);">You will leave AI Powered Travel Companion to book on the provider's site. No payment is taken here. Prices can change.</p>
         ${options.map((o, i) => `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border);">
             <div><strong>${escapeHtml(o.book_with || "Provider")}</strong>${o.option_title ? `<div style="font-size:0.8rem;color:var(--color-text-muted);">${escapeHtml(o.option_title)}</div>` : ""}</div>
             <div style="display:flex;align-items:center;gap:10px;">
-              ${o.price ? `<span>₹${Number(o.price).toLocaleString("en-IN")}${(raw.search_params && raw.search_params.adults > 1) ? ` <small style="color:var(--color-text-muted);">total, ${raw.search_params.adults} travellers</small>` : ""}</span>` : ""}
+              ${o.price ? `<span>₹${Number(o.price).toLocaleString("en-IN")}<small style="color:var(--color-text-muted);"> per person</small></span>` : ""}
               <button type="button" class="btn btn-primary btn-sm btn-open-booking" data-idx="${i}">Book ↗</button>
             </div>
           </div>`).join("")}`;
@@ -460,7 +749,7 @@ class ItineraryPlannerController {
       this.selectedOutbound = opt;
       const statusSpan = document.getElementById("selectedOutboundStatus");
       if (statusSpan) {
-        statusSpan.innerHTML = `<span style="color:var(--color-primary);">✓ Selected: ${escapeHtml(opt.operator)} (₹${opt.price || 0})</span>`;
+        statusSpan.innerHTML = `<span style="color:var(--color-primary);">✓ Selected: ${escapeHtml(opt.operator)} (${opt.price ? "₹" + Math.round(opt.price).toLocaleString("en-IN") + " per person" : "fare not provided"})</span>`;
       }
       document.querySelectorAll("#outboundTransportList .transport-option-card").forEach(c => {
         c.classList.toggle("selected", c.id === `transport-${opt.id}`);
@@ -469,7 +758,7 @@ class ItineraryPlannerController {
       this.selectedReturn = opt;
       const statusSpan = document.getElementById("selectedReturnStatus");
       if (statusSpan) {
-        statusSpan.innerHTML = `<span style="color:var(--color-primary);">✓ Selected: ${escapeHtml(opt.operator)} (₹${opt.price || 0})</span>`;
+        statusSpan.innerHTML = `<span style="color:var(--color-primary);">✓ Selected: ${escapeHtml(opt.operator)} (${opt.price ? "₹" + Math.round(opt.price).toLocaleString("en-IN") + " per person" : "fare not provided"})</span>`;
       }
       document.querySelectorAll("#returnTransportList .transport-option-card").forEach(c => {
         c.classList.toggle("selected", c.id === `transport-${opt.id}`);
@@ -489,146 +778,331 @@ class ItineraryPlannerController {
 
   // --- Step 3: Hotel Search & Selection ---
 
-  async handleProceedToHotels() {
-    this.setStep(3);
-    await this.searchHotels();
+  // --- Where the trip goes: city, state or country ---
+
+  initScope() {
+    const dest = document.getElementById("itineraryDest");
+    if (dest) dest.addEventListener("change", () => this.loadScope());
   }
 
-  async searchHotels() {
-    const container = document.getElementById("hotelListContainer");
-    const sortSelect = document.getElementById("hotelSortSelect");
-    const sortBy = sortSelect ? sortSelect.value : "relevance";
+  tripDays() {
+    const dep = document.getElementById("itineraryDepDate")?.value;
+    const ret = document.getElementById("itineraryRetDate")?.value;
+    if (!dep || !ret) return 3;
+    const n = Math.round((new Date(ret) - new Date(dep)) / 86400000) + 1;
+    return Math.min(14, Math.max(1, n));
+  }
 
-    if (!container) return;
-    container.innerHTML = `
-      <div class="empty-state" style="grid-column:1/-1;">
-        <p>Searching verified Google Hotels in ${escapeHtml(this.destination)}…</p>
-      </div>
-    `;
+  isBigPlace() {
+    return !!this.scopeInfo && (this.scopeInfo.kind === "state" || this.scopeInfo.kind === "country");
+  }
 
-    try {
-      const payload = {
-        destination: this.destination,
-        check_in_date: this.outboundDate,
-        check_out_date: this.returnDate || this.outboundDate,
-        travelers: this.travelers,
-        sort_by: sortBy,
-        currency: "INR"
-      };
+  /** The city flights and trains are searched to (the landing city for a state or country). */
+  transportCity() {
+    return this.isBigPlace() ? (this.scopeState.arrival || this.destination) : this.destination;
+  }
 
-      const res = await api.searchHotels(payload);
-      this.hotelData = res.hotels || [];
-      this.renderHotelsList(this.hotelData);
-      this.persistSessionState();
-    } catch (err) {
-      console.error("Hotel search error:", err);
-      container.innerHTML = `
-        <div class="error-state" style="grid-column:1/-1;">
-          <p>Hotel search unavailable: ${escapeHtml(err.message)}</p>
-          <button class="btn btn-secondary btn-sm" id="btnRetryHotels">Retry Hotels</button>
-        </div>
-      `;
-      const retryBtn = container.querySelector("#btnRetryHotels");
-      if (retryBtn) retryBtn.addEventListener("click", () => this.searchHotels());
+  /** Places to stay in, in visiting order, from the answers given in the "Plan your area" card. */
+  areasList() {
+    const info = this.scopeInfo;
+    const st = this.scopeState;
+    if (!info) return [this.destination];
+    let list = [];
+    if (this.isBigPlace()) {
+      if (st.arrival) list.push(st.arrival);
+      list.push(...st.selected);
+      if (info.kind === "state" && st.mode === "neighbours") list.push(...st.neighbourSelected);
+    } else {
+      list.push(this.destination);
+      if (st.mode === "nearby") list.push(...st.selected);
     }
+    const seen = new Set();
+    return list.filter(a => a && !seen.has(a.toLowerCase()) && seen.add(a.toLowerCase()));
   }
 
-  renderHotelsList(hotels) {
-    const container = document.getElementById("hotelListContainer");
-    if (!container) return;
-
-    container.innerHTML = "";
-    if (hotels.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state" style="grid-column:1/-1;">
-          <h3>No hotels returned</h3>
-          <p>You can skip accommodation to continue generating your local activities.</p>
-        </div>
-      `;
+  async loadScope() {
+    const panel = document.getElementById("scopePanel");
+    const dest = (document.getElementById("itineraryDest")?.value || "").trim();
+    if (!panel) return;
+    if (dest.length < 2) {
+      this.scopeInfo = null;
+      this.scopeFor = "";
+      this.renderScopePanel();
       return;
     }
-
-    hotels.forEach(h => {
-      const card = document.createElement("article");
-      card.className = "hotel-card";
-      card.id = `hotel-${h.id}`;
-      if (this.selectedHotel && this.selectedHotel.id === h.id) {
-        card.classList.add("selected");
-      }
-
-      const labelsHtml = (h.recommendation_labels || []).map(l => {
-        let cls = "hotel-tag";
-        if (l === "Cheapest") cls += " cheapest";
-        else if (l === "Best Rated") cls += " best-rated";
-        else if (l === "Best Value") cls += " best-value";
-        return `<span class="${cls}">${escapeHtml(l)}</span>`;
-      }).join("");
-
-      const priceText = h.nightly_price ? `₹${Math.round(h.nightly_price).toLocaleString()} / night` : "No price data";
-      const totalText = h.total_price ? `(Total: ₹${Math.round(h.total_price).toLocaleString()})` : "";
-      const ratingText = h.rating ? `★ ${h.rating} ${h.review_count ? `(${h.review_count.toLocaleString()} reviews)` : ""}` : "Unrated";
-
-      card.innerHTML = `
-        <div>
-          <div class="hotel-labels-row" style="margin-bottom:6px;">${labelsHtml}</div>
-          <h3 style="font-size:1.1rem;margin-bottom:4px;color:var(--color-text-primary);">${escapeHtml(h.name)}</h3>
-          <div style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:6px;">
-            ${h.star_class ? `${h.star_class}-Star • ` : ""}${escapeHtml(ratingText)}
-          </div>
-          <p style="font-size:0.825rem;color:var(--color-text-secondary);margin-bottom:8px;">${escapeHtml(h.address)}</p>
-          ${h.free_cancellation ? `<span class="badge badge-primary" style="font-size:0.75rem;">✓ Free Cancellation</span>` : ""}
-        </div>
-
-        ${h.recommendation_reason ? `<div class="transport-reason-note" style="margin:4px 0;">${escapeHtml(h.recommendation_reason)}</div>` : ""}
-
-        <div style="border-top:1px solid var(--color-border);padding-top:10px;margin-top:auto;">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-            <div style="font-size:1.15rem;font-weight:800;color:var(--color-primary);">${priceText}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-muted);">${totalText}</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary btn-sm btn-hotel-details" style="flex:1;">
-              Price Comparison
-            </button>
-            <button type="button" class="btn btn-primary btn-sm btn-select-hotel" style="flex:1;">
-              ${(this.selectedHotel && this.selectedHotel.id === h.id) ? "Selected ✓" : "Select Hotel"}
-            </button>
-          </div>
-        </div>
-      `;
-
-      card.querySelector(".btn-select-hotel").addEventListener("click", () => {
-        this.selectHotel(h);
-      });
-
-      card.querySelector(".btn-hotel-details").addEventListener("click", () => {
-        this.openHotelPriceComparisonModal(h);
-      });
-
-      container.appendChild(card);
-    });
+    if (dest === this.scopeFor && this.scopeInfo) return;
+    panel.hidden = false;
+    panel.innerHTML = `<div class="scope-card"><div class="scope-advice">Checking how big “${escapeHtml(dest)}” is…</div></div>`;
+    try {
+      const info = await api.getItineraryScope({ destination: dest, duration_days: this.tripDays() });
+      if ((document.getElementById("itineraryDest")?.value || "").trim() !== dest) return; // user typed something else meanwhile
+      this.scopeInfo = info;
+      this.scopeFor = dest;
+      this.scopeState = { mode: (info.modes[0] || {}).value || "", selected: [], neighbourSelected: [], arrival: "" };
+      this.renderScopePanel();
+    } catch (_) {
+      // The questions are a help, not a requirement: plan the place as typed
+      this.scopeInfo = null;
+      this.scopeFor = dest;
+      this.renderScopePanel();
+    }
   }
 
-  selectHotel(h, quiet = false) {
-    this.selectedHotel = h;
-    this.hotelSkipped = false;
-    document.querySelectorAll("#hotelListContainer .hotel-card").forEach(c => {
-      const isSel = c.id === `hotel-${h.id}`;
-      c.classList.toggle("selected", isSel);
-      const selBtn = c.querySelector(".btn-select-hotel");
-      if (selBtn) selBtn.textContent = isSel ? "Selected ✓" : "Select Hotel";
+  renderScopePanel() {
+    const panel = document.getElementById("scopePanel");
+    if (!panel) return;
+    if (!this.scopeInfo) { panel.hidden = true; panel.innerHTML = ""; return; }
+    panel.hidden = false;
+    panel.innerHTML = buildScopePanelHtml(this.scopeInfo, this.scopeState);
+    const refreshCount = () => {
+      const el = panel.querySelector("#scopeCount");
+      if (el) el.textContent = scopeCountText(this.scopeInfo, this.areasList().length);
+    };
+    panel.querySelectorAll('input[name="scopeMode"]').forEach(r => {
+      r.addEventListener("change", () => { this.scopeState.mode = r.value; this.renderScopePanel(); });
     });
+    panel.querySelectorAll(".scope-check").forEach(c => {
+      c.addEventListener("change", () => {
+        const set = new Set(this.scopeState.selected);
+        c.checked ? set.add(c.value) : set.delete(c.value);
+        this.scopeState.selected = [...set];
+        refreshCount();
+      });
+    });
+    panel.querySelectorAll(".scope-ncheck").forEach(c => {
+      c.addEventListener("change", () => {
+        const set = new Set(this.scopeState.neighbourSelected);
+        c.checked ? set.add(c.value) : set.delete(c.value);
+        this.scopeState.neighbourSelected = [...set];
+        refreshCount();
+      });
+    });
+    const arrival = panel.querySelector("#scopeArrival");
+    if (arrival) {
+      attachPlaceAutocomplete(arrival);
+      const take = () => { this.scopeState.arrival = arrival.value.trim(); refreshCount(); };
+      arrival.addEventListener("input", take);
+      arrival.addEventListener("change", take);
+    }
+    refreshCount();
+  }
 
-    const proceedLabel = document.getElementById("hotelProceedLabel");
-    if (proceedLabel) {
-      proceedLabel.textContent = `Continue with ${h.name} →`;
+  /** Makes sure the "Plan your area" questions were answered before searching. Returns false to stop. */
+  async ensureScope() {
+    if (!(this.scopeInfo && this.scopeFor === this.destination)) await this.loadScope();
+    if (!this.isBigPlace()) return true;
+    const input = document.getElementById("scopeArrival");
+    if (input) this.scopeState.arrival = input.value.trim();
+    if (!this.scopeState.arrival) {
+      toast.info(`${this.scopeInfo.name} is large. Tell us which city you will land in, and pick the places you would like to visit.`);
+      const panel = document.getElementById("scopePanel");
+      if (panel) panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (input) input.focus();
+      return false;
+    }
+    if (this.scopeState.arrival.toLowerCase() === this.source.toLowerCase()) {
+      toast.error("The landing city cannot be the same as your starting city.");
+      return false;
+    }
+    return true;
+  }
+
+  // --- Step 4: one hotel for each stay, near the places of those days ---
+
+  startHotelStep() {
+    this.stayHotels = {};
+    this.stayChoices = {};
+    this.renderStayBlocks();
+    this.setStep(3);
+  }
+
+  renderStayBlocks() {
+    const container = document.getElementById("stayBlocksContainer");
+    const notices = document.getElementById("stayNotices");
+    const sk = this.skeleton;
+    if (!container || !sk) return;
+
+    if (notices) {
+      const msgs = (sk.notices || []).map(n => `<div class="date-strip-notice">ℹ️ ${escapeHtml(n)}</div>`).join("");
+      notices.innerHTML = msgs + buildTransfersHtml(sk.transfers);
     }
 
-    this.persistSessionState();
-    if (!quiet) toast.success(`Selected hotel: ${h.name}`);
+    container.innerHTML = "";
+    (sk.stay_blocks || []).forEach(b => {
+      if (!b.needs_hotel) {
+        const note = document.createElement("div");
+        note.className = "stay-block stay-none";
+        note.textContent = `Day ${b.start_day} (${b.area}) is your departure day, so no overnight stay is needed.`;
+        container.appendChild(note);
+        return;
+      }
+      const wrap = document.createElement("div");
+      wrap.innerHTML = buildStayBlockHtml(b, this.stayChoices[b.index]);
+      const el = wrap.firstElementChild;
+      container.appendChild(el);
+      el.querySelector(".stay-find").addEventListener("click", () => this.searchStayHotels(b.index));
+      el.querySelector(".stay-skip").addEventListener("click", () => this.skipStayHotel(b.index));
+      el.querySelector(".stay-sort").addEventListener("change", () => {
+        if (this.stayHotels[b.index]) this.searchStayHotels(b.index);
+      });
+      if (this.stayHotels[b.index] && this.stayHotels[b.index].hotels) this.renderStayHotels(b.index);
+    });
   }
 
-  async openHotelPriceComparisonModal(hotel) {
+  stayEl(index) {
+    return document.querySelector(`#stayBlocksContainer .stay-block[data-index="${index}"]`);
+  }
+
+  async searchStayHotels(index) {
+    const block = (this.skeleton.stay_blocks || []).find(b => b.index === index);
+    const el = this.stayEl(index);
+    if (!block || !el) return;
+    const slot = el.querySelector(".stay-hotels");
+    const sort = el.querySelector(".stay-sort").value;
+    slot.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>Searching hotels near ${escapeHtml(block.search_query)}…</p></div>`;
+    try {
+      const res = await api.searchHotels({
+        destination: block.search_query,
+        check_in_date: block.check_in || this.outboundDate,
+        check_out_date: block.check_out || this.returnDate || this.outboundDate,
+        travelers: this.travelers,
+        sort_by: sort,
+        currency: "INR"
+      });
+      this.stayHotels[index] = { hotels: res.hotels || [], notice: res.notice || "" };
+      this.renderStayHotels(index);
+    } catch (err) {
+      slot.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p class="error-text">Could not load hotels: ${escapeHtml(err.message)}</p></div>`;
+    }
+  }
+
+  renderStayHotels(index) {
+    const el = this.stayEl(index);
+    if (!el) return;
+    const slot = el.querySelector(".stay-hotels");
+    const data = this.stayHotels[index];
+    const block = (this.skeleton.stay_blocks || []).find(b => b.index === index);
+    slot.innerHTML = "";
+    if (!data || !data.hotels.length) {
+      slot.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><h3>No hotels returned</h3><p>${escapeHtml(data && data.notice ? data.notice : "Try again, or choose “No hotel needed” for this stay.")}</p></div>`;
+      return;
+    }
+    const chosen = this.stayChoices[index];
+    data.hotels.forEach(h => slot.appendChild(this.buildHotelCard(h, !!(chosen && chosen.id === h.id), index, block)));
+  }
+
+  buildHotelCard(h, isSelected, index, block) {
+    const card = document.createElement("article");
+    card.className = "hotel-card" + (isSelected ? " selected" : "");
+    card.id = `hotel-${index}-${h.id}`;
+    const labelsHtml = (h.recommendation_labels || []).map(l => {
+      let cls = "hotel-tag";
+      if (l === "Cheapest") cls += " cheapest";
+      else if (l === "Best Rated") cls += " best-rated";
+      else if (l === "Best Value") cls += " best-value";
+      return `<span class="${cls}">${escapeHtml(l)}</span>`;
+    }).join("");
+    const priceText = h.nightly_price ? `₹${Math.round(h.nightly_price).toLocaleString("en-IN")} / night` : "No price data";
+    const totalText = h.total_price ? `(Stay total: ₹${Math.round(h.total_price).toLocaleString("en-IN")})` : "";
+    const ratingText = h.rating ? `★ ${h.rating} ${h.review_count ? `(${h.review_count.toLocaleString()} reviews)` : ""}` : "Unrated";
+    card.innerHTML = `
+      <div>
+        <div class="hotel-labels-row" style="margin-bottom:6px;">${labelsHtml}</div>
+        <h3 style="font-size:1.1rem;margin-bottom:4px;color:var(--color-text-primary);">${escapeHtml(h.name)}</h3>
+        <div style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:6px;">${h.star_class ? `${h.star_class}-Star • ` : ""}${escapeHtml(ratingText)}</div>
+        <p style="font-size:0.825rem;color:var(--color-text-secondary);margin-bottom:8px;">${escapeHtml(h.address)}</p>
+        ${h.free_cancellation ? `<span class="badge badge-primary" style="font-size:0.75rem;">✓ Free Cancellation</span>` : ""}
+      </div>
+      ${h.recommendation_reason ? `<div class="transport-reason-note" style="margin:4px 0;">${escapeHtml(h.recommendation_reason)}</div>` : ""}
+      <div style="border-top:1px solid var(--color-border);padding-top:10px;margin-top:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-size:1.15rem;font-weight:800;color:var(--color-primary);">${priceText}</div>
+          <div style="font-size:0.75rem;color:var(--color-text-muted);">${totalText}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary btn-sm btn-hotel-details" style="flex:1;">Price Comparison</button>
+          <button type="button" class="btn btn-primary btn-sm btn-select-hotel" style="flex:1;">${isSelected ? "Selected ✓" : "Select Hotel"}</button>
+        </div>
+      </div>`;
+    card.querySelector(".btn-select-hotel").addEventListener("click", () => this.chooseStayHotel(index, h));
+    card.querySelector(".btn-hotel-details").addEventListener("click", () =>
+      this.openHotelPriceComparisonModal(h, block ? { check_in: block.check_in, check_out: block.check_out } : null));
+    return card;
+  }
+
+  chooseStayHotel(index, hotel) {
+    this.stayChoices[index] = hotel;
+    this.renderStayBlocks();
+    this.persistSessionState();
+    toast.success(`Stay ${index + 1}: ${hotel.name}`);
+  }
+
+  skipStayHotel(index) {
+    this.stayChoices[index] = null;
+    this.renderStayBlocks();
+    this.persistSessionState();
+  }
+
+  /** Adds the chosen hotels to the plan (server refreshes directions and the budget) and shows the result. */
+  async handleFinalize() {
+    const sk = this.skeleton;
+    const resultsContainer = document.getElementById("itineraryResults");
+    if (!sk || !resultsContainer) return;
+    const needing = (sk.stay_blocks || []).filter(b => b.needs_hotel);
+    const missing = needing.filter(b => this.stayChoices[b.index] === undefined);
+    if (missing.length) {
+      toast.info(`No hotel chosen for ${missing.map(b => `Stay ${b.index + 1}`).join(", ")}. It will be left out of the budget.`);
+    }
+    resultsContainer.innerHTML = `
+      <div class="empty-state"><h3>Putting your trip together…</h3><p>Adding your hotels, refreshing directions and calculating the budget.</p></div>`;
+    this.setStep(5);
+    try {
+      const data = await api.finalizeItinerary({
+        itinerary: sk,
+        stay_hotels: needing.map(b => ({ block_index: b.index, hotel: this.stayChoices[b.index] || null })),
+        travelers_count: this.travelers,
+        rooms: this.rooms,
+        budget_per_person_per_day: this.prefs.budgetPerDay || 3000,
+        transportation: this.prefs.localTransport || "public"
+      });
+      Object.assign(data, {
+        source: this.source,
+        destination: data.destination || this.destination,
+        departure_date: this.outboundDate,
+        return_date: this.returnDate
+      });
+      this.finalItinerary = data;
+      this.renderFinalItinerary(resultsContainer, data);
+      this.persistSessionState();
+      announceServiceReady("Itinerary Planner");
+      const names = (data.selected_hotels || []).map(h => h.name).filter(Boolean);
+      api.createHistory({
+        feature_type: "itinerary",
+        title: `Trip: ${this.source} → ${this.destination} (${data.duration_days} Days)`,
+        preview: `${this.selectedOutbound?.operator || "Transport"} + ${names.length ? names.join(", ") : "No hotel"} • ${data.estimated_budget_total}`,
+        payload: {
+          ...data,
+          travellers: this.travelers,
+          preference: this.preference,
+          selected_outbound_transport: this.selectedOutbound,
+          selected_return_transport: this.selectedReturn
+        }
+      }).catch(e => console.warn("Auto-save history notice:", e));
+      toast.success("Your itinerary is ready!");
+    } catch (err) {
+      resultsContainer.innerHTML = `
+        <div class="empty-state">
+          <h3>Could not finish the itinerary</h3>
+          <p class="error-text">${escapeHtml(err.message)}</p>
+          <button type="button" class="btn btn-primary" id="btnRetryFinalize">Try again</button>
+          <button type="button" class="btn btn-secondary" id="btnBackToStays">&larr; Back to hotels</button>
+        </div>`;
+      resultsContainer.querySelector("#btnRetryFinalize").addEventListener("click", () => this.handleFinalize());
+      resultsContainer.querySelector("#btnBackToStays").addEventListener("click", () => this.setStep(3));
+    }
+  }
+
+  async openHotelPriceComparisonModal(hotel, dates = null) {
     const propertyToken = (hotel.raw_provider_data && hotel.raw_provider_data.property_token) || hotel.id;
 
     modal.open({
@@ -645,8 +1119,8 @@ class ItineraryPlannerController {
       if (!sources || sources.length === 0) {
         const res = await api.getHotelDetails({
           property_token: propertyToken,
-          check_in_date: this.outboundDate,
-          check_out_date: this.returnDate || this.outboundDate,
+          check_in_date: (dates && dates.check_in) || this.outboundDate,
+          check_out_date: (dates && dates.check_out) || this.returnDate || this.outboundDate,
           currency: "INR",
           adults: this.travelers
         });
@@ -879,51 +1353,40 @@ class ItineraryPlannerController {
       transportation: localTransport,
       selected_outbound_transport: this.selectedOutbound,
       selected_return_transport: this.selectedReturn,
-      selected_hotel: this.selectedHotel
+      rooms: this.rooms,
+      areas: this.areasList(),
+      scope_kind: this.scopeInfo ? this.scopeInfo.kind : null,
+      arrival_city: this.isBigPlace() ? this.scopeState.arrival : null
     };
+    this.prefs = { budgetPerDay, localTransport, durationDays };
 
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.innerHTML = `<span>Generating Time-Aware Itinerary…</span>`;
+      submitBtn.innerHTML = `<span>Planning your trip…</span>`;
     }
 
     resultsContainer.innerHTML = `
       <div class="empty-state">
         <div class="skeleton" style="width:60px;height:60px;border-radius:50%;margin:0 auto 16px auto;"></div>
         <h3>Synthesizing door-to-door itinerary for ${escapeHtml(this.destination)}…</h3>
-        <p>Grounding schedule around ${escapeHtml(this.selectedOutbound?.operator || 'outbound transit')} arrival and hotel accommodation.</p>
+        <p>Planning real places day by day around your ${escapeHtml(this.selectedOutbound?.operator || 'outbound transit')} arrival. Hotels come next.</p>
       </div>
     `;
 
     this.setStep(5);
 
     try {
-      this.finalItinerary = await api.generateItinerary(payload);
-      this.renderFinalItinerary(resultsContainer, this.finalItinerary);
-
-      // Save to persistent History (Section 21)
-      api.createHistory({
-        feature_type: "itinerary",
-        title: `Trip: ${this.source} → ${this.destination} (${durationDays} Days)`,
-        preview: `${this.selectedOutbound?.operator || 'Transport'} + ${this.selectedHotel?.name || 'Hotel'} • ${this.finalItinerary.estimated_budget_total}`,
-        payload: {
-          ...this.finalItinerary,
-          source: this.source,
-          destination: this.destination,
-          departure_date: this.outboundDate,
-          return_date: this.returnDate,
-          travellers: this.travelers,
-          preference: this.preference,
-          duration_days: durationDays,
-          selected_outbound_transport: this.selectedOutbound,
-          selected_return_transport: this.selectedReturn,
-          selected_hotel: this.selectedHotel,
-          hotel_skipped: this.hotelSkipped
-        }
-      }).catch(e => console.warn("Auto-save history notice:", e));
-
+      // The plan comes first (no hotels); the traveller then picks a hotel for each stay
+      this.skeleton = await api.generateItinerary(payload);
+      this.finalItinerary = null;
       this.persistSessionState();
-      toast.success("Door-to-door itinerary generated successfully!");
+      const needsHotel = (this.skeleton.stay_blocks || []).some(b => b.needs_hotel);
+      if (needsHotel) {
+        this.startHotelStep();
+        toast.success("Your plan is ready. Now choose where to stay.");
+      } else {
+        await this.handleFinalize();
+      }
     } catch (err) {
       console.error("Itinerary generation failed:", err);
       resultsContainer.innerHTML = `
@@ -938,7 +1401,7 @@ class ItineraryPlannerController {
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = `<span>Generate Door-to-Door Itinerary</span>`;
+        submitBtn.innerHTML = `<span>Generate My Itinerary</span>`;
       }
     }
   }
@@ -1029,24 +1492,30 @@ class ItineraryPlannerController {
     const ob = data.selected_outbound_transport;
     const ib = data.selected_return_transport;
     const htl = data.selected_hotel;
+    const hasStays = (data.stay_blocks || []).some(b => b.needs_hotel);
+    // The hotel a given day starts from (each stay can have its own)
+    const hotelForDay = (n) => {
+      const b = (data.stay_blocks || []).find(x => n >= x.start_day && n <= x.end_day);
+      return hasStays ? (b && b.hotel ? b.hotel : null) : htl;
+    };
 
     journeyCard.innerHTML = `
       <h3 style="font-size:1.15rem;color:var(--color-primary);margin-bottom:12px;">🚆 Verified Journey & Accommodation</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;">
         <div style="background:var(--color-surface-soft);padding:12px;border-radius:var(--radius-md);">
           <strong>Outbound Transit:</strong><br/>
-          ${ob ? `${escapeHtml(ob.operator)} (${escapeHtml(ob.number || '')})<br/>${escapeHtml(ob.departure_time)} → ${escapeHtml(ob.arrival_time)}<br/><span style="color:var(--color-primary);font-weight:700;">₹${ob.price || 0} (Live Quote)</span>` : 'Not specified'}
+          ${ob ? `${escapeHtml(ob.operator)} (${escapeHtml(ob.number || '')})<br/>${escapeHtml(ob.departure_time)} → ${escapeHtml(ob.arrival_time)}<br/><span style="color:var(--color-primary);font-weight:700;">${ob.price ? "₹" + Math.round(ob.price).toLocaleString("en-IN") + " per person (live quote)" : "Fare not provided"}</span>` : 'Not specified'}
           ${ob && ob.booking_url ? `<br/><a href="${escapeHtml(ob.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Provider Booking Link ↗</a>` : ''}
         </div>
         <div style="background:var(--color-surface-soft);padding:12px;border-radius:var(--radius-md);">
           <strong>Return Transit:</strong><br/>
-          ${ib ? `${escapeHtml(ib.operator)} (${escapeHtml(ib.number || '')})<br/>${escapeHtml(ib.departure_time)} → ${escapeHtml(ib.arrival_time)}<br/><span style="color:var(--color-primary);font-weight:700;">₹${ib.price || 0} (Live Quote)</span>` : 'One-way / Not specified'}
+          ${ib ? `${escapeHtml(ib.operator)} (${escapeHtml(ib.number || '')})<br/>${escapeHtml(ib.departure_time)} → ${escapeHtml(ib.arrival_time)}<br/><span style="color:var(--color-primary);font-weight:700;">${ib.price ? "₹" + Math.round(ib.price).toLocaleString("en-IN") + " per person (live quote)" : "Fare not provided"}</span>` : 'One-way / Not specified'}
           ${ib && ib.booking_url ? `<br/><a href="${escapeHtml(ib.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Provider Booking Link ↗</a>` : ''}
         </div>
         <div style="background:var(--color-surface-soft);padding:12px;border-radius:var(--radius-md);">
           <strong>Accommodation:</strong><br/>
-          ${htl ? `<b>${escapeHtml(htl.name)}</b> (★ ${htl.rating || 'N/A'})<br/>${escapeHtml(htl.address || '')}<br/><span style="color:var(--color-primary);font-weight:700;">₹${htl.nightly_price || 0}/night (Total: ₹${htl.total_price || 0})</span>` : '<em>Not selected (self-arranged)</em>'}
-          ${htl && htl.booking_url ? `<br/><a href="${escapeHtml(htl.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Hotel Booking Link ↗</a>` : ''}
+          ${hasStays ? buildStaysSummaryHtml(data) : htl ? `<b>${escapeHtml(htl.name)}</b> (★ ${htl.rating || 'N/A'})<br/>${escapeHtml(htl.address || '')}<br/><span style="color:var(--color-primary);font-weight:700;">₹${htl.nightly_price || 0}/night (Total: ₹${htl.total_price || 0})</span>` : '<em>Not selected (self-arranged)</em>'}
+          ${!hasStays && htl && htl.booking_url ? `<br/><a href="${escapeHtml(htl.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Hotel Booking Link ↗</a>` : ''}
         </div>
       </div>
     `;
@@ -1121,13 +1590,14 @@ class ItineraryPlannerController {
         `;
       };
 
-      const startLabel = htl
-        ? `<span class="stop-label hotel">🏨 Hotel / Stay</span> <b>${escapeHtml(htl.name)}</b>${htl.address ? ` — ${escapeHtml(htl.address)}` : ""}`
+      const dayHotel = hotelForDay(day.day_number);
+      const startLabel = dayHotel
+        ? `<span class="stop-label hotel">🏨 Hotel / Stay</span> <b>${escapeHtml(dayHotel.name)}</b>${dayHotel.address ? ` — ${escapeHtml(dayHotel.address)}` : ""}`
         : "";
 
       dayEl.innerHTML = `
         <div class="day-card-header">
-          <h3 class="day-card-title">Day ${day.day_number}: ${escapeHtml(day.theme)}</h3>
+          <h3 class="day-card-title">Day ${day.day_number}${day.area ? " · " + escapeHtml(day.area) : ""}: ${escapeHtml(day.theme)}</h3>
           <span class="badge badge-primary">${escapeHtml(day.estimated_day_cost)}</span>
         </div>
         ${startLabel ? `<div class="day-start-point">${startLabel}<div class="stop-meta">Each stop below shows how to reach it from the stop before it. The first stop is measured from here.</div></div>` : ""}
@@ -1192,8 +1662,105 @@ class ItineraryPlannerController {
         </tbody>
       </table>
     `;
+    // Newer itineraries carry a full breakdown: headline numbers + a button for the details
+    if (cb.detail) {
+      costCard.innerHTML = `
+        <h3 style="font-size:1.25rem;color:var(--color-text-primary);margin-bottom:8px;">Trip budget</h3>
+        <p style="font-size:0.9rem;color:var(--color-text-muted);margin-bottom:12px;">Flight and hotel numbers are provider quotes; everything else is an estimate from your daily budget.</p>
+        ${buildBudgetSummaryHtml(cb)}
+        <button type="button" class="btn btn-primary" id="btnBudgetBreakdown" aria-expanded="false" style="margin-top:12px;">View total price breakdown</button>
+        <div id="budgetBreakdown" hidden>${buildBudgetBreakdownHtml(cb)}</div>`;
+      const toggle = costCard.querySelector("#btnBudgetBreakdown");
+      const panel = costCard.querySelector("#budgetBreakdown");
+      toggle.addEventListener("click", () => {
+        panel.hidden = !panel.hidden;
+        toggle.textContent = panel.hidden ? "View total price breakdown" : "Hide price breakdown";
+        toggle.setAttribute("aria-expanded", String(!panel.hidden));
+      });
+    }
     container.appendChild(costCard);
+
+    // 5. Short version for use while travelling (view first, then download as PDF)
+    container.appendChild(this.buildQuickVersionSection(data));
     announceServiceReady("Itinerary Planner");
+  }
+
+  /** "Quick version" card at the end of the itinerary: shorter view with map links, then its own PDF. */
+  buildQuickVersionSection(data) {
+    const wrap = document.createElement("section");
+    wrap.className = "quick-version-section";
+    wrap.setAttribute("aria-label", "Quick version of the itinerary");
+    wrap.innerHTML = `
+      <div class="quick-cta">
+        <div>
+          <strong>📱 Need something shorter for the road?</strong>
+          <p>Get a one-glance version with only the places, meals and map links. You can read it here first, then download it as a PDF.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="btnQuickVersion">Generate quick version</button>
+      </div>
+      <div id="quickVersionResult" hidden></div>`;
+
+    const result = wrap.querySelector("#quickVersionResult");
+    const openBtn = wrap.querySelector("#btnQuickVersion");
+
+    openBtn.addEventListener("click", () => {
+      result.innerHTML = `
+        ${buildQuickVersionHtml(data)}
+        <div class="qv-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btnQuickPdf">⬇ Download quick version (PDF)</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnHideQuick">Hide quick version</button>
+        </div>`;
+      result.hidden = false;
+      openBtn.textContent = "Refresh quick version";
+      result.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      result.querySelector("#btnHideQuick").addEventListener("click", () => {
+        result.hidden = true;
+        result.innerHTML = "";
+        openBtn.textContent = "Generate quick version";
+      });
+
+      const pdfBtn = result.querySelector("#btnQuickPdf");
+      pdfBtn.addEventListener("click", async () => {
+        const original = pdfBtn.innerHTML;
+        pdfBtn.disabled = true;
+        pdfBtn.textContent = "Preparing PDF…";
+        try {
+          const blob = await api.downloadPdf(`${data.title} (Quick Version)`, {
+            mode: "short",
+            title: `${data.title} (Quick Version)`,
+            destination: data.destination,
+            source: data.source,
+            departure_date: data.departure_date,
+            return_date: data.return_date,
+            duration_days: data.duration_days,
+            outbound_transport: data.selected_outbound_transport,
+            return_transport: data.selected_return_transport,
+            hotel: data.selected_hotel,
+            hotels: data.selected_hotels,
+            days: data.days,
+            estimated_budget_total: data.estimated_budget_total
+          });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = `${String(data.destination || "Trip").replace(/\s+/g, "_")}_Quick_Itinerary.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          a.remove();
+          toast.success("Quick version downloaded.");
+        } catch (err) {
+          console.error("Quick PDF error:", err);
+          toast.error("Quick PDF failed: " + err.message);
+        } finally {
+          pdfBtn.disabled = false;
+          pdfBtn.innerHTML = original;
+        }
+      });
+    });
+    return wrap;
   }
 
   // --- Session Persistence (Section 19) ---
@@ -1215,12 +1782,23 @@ class ItineraryPlannerController {
       travelers: live ? (parseInt(val("itineraryTravelers"), 10) || 1) : this.travelers,
       preference: live ? (val("itineraryPreference") || this.preference) : this.preference,
       transportData: this.transportData,
+      trainClasses: this.trainClasses,
+      fromStationCode: this.fromStationCode,
+      toStationCode: this.toStationCode,
+      stations: this.stations,
+      dateStrips: this.dateStrips,
       selectedOutbound: this.selectedOutbound,
       selectedReturn: this.selectedReturn,
       hotelData: this.hotelData,
       selectedHotel: this.selectedHotel,
       hotelSkipped: this.hotelSkipped,
       finalItinerary: this.finalItinerary,
+      skeleton: this.skeleton,
+      stayChoices: this.stayChoices,
+      scope: { info: this.scopeInfo, for: this.scopeFor, state: this.scopeState },
+      transportDestination: this.transportDestination,
+      rooms: this.rooms,
+      tripPrefs: this.prefs,
       prefs: {
         budget: val("itineraryBudgetInput"),
         foodType: val("foodType"),
@@ -1285,12 +1863,31 @@ class ItineraryPlannerController {
       this.travelers = data.travelers || 1;
       this.preference = data.preference || "best-overall";
       this.transportData = data.transportData;
+      this.trainClasses = Array.isArray(data.trainClasses) ? data.trainClasses : [];
+      this.fromStationCode = data.fromStationCode || "";
+      this.toStationCode = data.toStationCode || "";
+      this.stations = data.stations || { from: [], to: [] };
+      this.dateStrips = data.dateStrips || { outbound: null, return: null };
+      this.applyTrainPreferencesToForm();
       this.selectedOutbound = data.selectedOutbound;
       this.selectedReturn = data.selectedReturn;
       this.selectedHotel = data.selectedHotel;
       this.hotelSkipped = data.hotelSkipped;
       this.finalItinerary = data.finalItinerary;
       this.hotelData = data.hotelData || [];
+      this.skeleton = data.skeleton || null;
+      this.stayChoices = data.stayChoices || {};
+      this.transportDestination = data.transportDestination || "";
+      this.rooms = data.rooms || null;
+      this.prefs = data.tripPrefs || {};
+      if (data.scope && data.scope.info) {
+        this.scopeInfo = data.scope.info;
+        this.scopeFor = data.scope.for || "";
+        this.scopeState = data.scope.state || this.scopeState;
+        this.renderScopePanel();
+      }
+      const roomsInput = document.getElementById("itineraryRooms");
+      if (roomsInput && this.rooms) roomsInput.value = this.rooms;
       this.applyPrefs(data.prefs);
 
       // Restore form inputs
@@ -1313,9 +1910,9 @@ class ItineraryPlannerController {
         this.renderFinalItinerary(resultsContainer, this.finalItinerary);
         this.setStep(5);
       } else if (this.transportData) {
-        this.renderTransportLeg("outbound", this.transportData.outbound);
+        this.renderTransportLeg("outbound", this.transportData.outbound, { fetchStrip: false });
         if (this.transportData.return_leg) {
-          this.renderTransportLeg("return", this.transportData.return_leg);
+          this.renderTransportLeg("return", this.transportData.return_leg, { fetchStrip: false });
         }
         if (this.selectedOutbound) {
           this.selectTransportOption("outbound", this.selectedOutbound);
@@ -1325,11 +1922,11 @@ class ItineraryPlannerController {
         }
 
         const step = data.currentStep || 2;
-        if (step >= 3 && this.hotelData.length > 0) {
+        if (this.skeleton && step === 3) {
+          this.renderStayBlocks();
           this.setStep(3);
-          this.renderHotelsList(this.hotelData);
-          if (this.selectedHotel) this.selectHotel(this.selectedHotel, true);
-          if (step >= 4 && (this.selectedHotel || this.hotelSkipped)) this.setStep(4);
+        } else if (step === 4) {
+          this.setStep(4);
         } else {
           this.setStep(2);
         }

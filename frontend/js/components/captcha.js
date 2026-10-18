@@ -144,7 +144,7 @@ class CaptchaManager {
         </div>
         <h3 style="margin-bottom:8px;">Security Verification</h3>
         <p style="font-size:0.9rem;color:var(--color-text-secondary);margin-bottom:16px;">
-          Please confirm you are human to use Smart Local Guide.
+          Please confirm you are human to use AI Powered Travel Companion.
         </p>
         <div id="captchaWidgetContainer" style="display:flex;justify-content:center;margin-bottom:12px;min-height:78px;"></div>
         <p id="captchaMessage" role="alert" style="font-size:0.85rem;color:var(--color-danger, #B91C1C);min-height:1.2em;margin-bottom:10px;"></p>

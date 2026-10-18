@@ -104,7 +104,7 @@ class AIService:
         res.append(m)
     return res
 
-  def _generate_with_fallback(self, prompt: str) -> str:
+  def _generate_with_fallback(self, prompt: str, system_prompt: Optional[str] = None) -> str:
     if not _gemini_available:
       raise RuntimeError(
           "AI service is not configured. Install google-genai: pip install"
@@ -130,7 +130,7 @@ class AIService:
           if _use_legacy_genai:
             genai.configure(api_key=api_key)  # type: ignore
             model = genai.GenerativeModel(  # type: ignore
-                model_name=model_name, system_instruction=_GEMINI_SYSTEM_PROMPT
+                model_name=model_name, system_instruction=system_prompt or _GEMINI_SYSTEM_PROMPT
             )
             resp = model.generate_content(prompt)
             return resp.text.strip()
@@ -140,7 +140,7 @@ class AIService:
                 model=model_name,
                 contents=prompt,
                 config=genai_types.GenerateContentConfig(
-                    system_instruction=_GEMINI_SYSTEM_PROMPT,
+                    system_instruction=system_prompt or _GEMINI_SYSTEM_PROMPT,
                 ),
             )
             return resp.text.strip()
@@ -273,38 +273,37 @@ class AIService:
   def _calculate_cost_breakdown(
       self, req: ItineraryRequest, trip_total: float
   ) -> Dict[str, Any]:
-    outbound_p = None
-    if req.selected_outbound_transport and isinstance(req.selected_outbound_transport, dict):
-      outbound_p = req.selected_outbound_transport.get("price")
+    """Budget for the whole trip. Details come from utils.budget (live quotes vs estimates)."""
+    from app.utils.budget import build_budget
 
-    return_p = None
-    if req.selected_return_transport and isinstance(req.selected_return_transport, dict):
-      return_p = req.selected_return_transport.get("price")
+    def _price(d: Any, key: str) -> Optional[float]:
+      return d.get(key) if isinstance(d, dict) else None
 
-    hotel_p = None
-    if req.selected_hotel and isinstance(req.selected_hotel, dict):
-      hotel_p = req.selected_hotel.get("total_price")
-      if hotel_p is None and req.selected_hotel.get("nightly_price"):
-        hotel_p = (req.selected_hotel.get("nightly_price") or 0) * req.duration_days
-
-    travelers = req.travelers_count or 1
-    total_transport = ((outbound_p or 0) + (return_p or 0)) * travelers
-    total_stay = (hotel_p or 0)
-    total_local = trip_total
-
-    overall_sum = int(total_transport + total_stay + total_local)
-    per_person = int(round(overall_sum / travelers))
-
+    hotel = req.selected_hotel
+    detail = build_budget(
+        travelers=req.travelers_count or 1,
+        days=req.duration_days,
+        per_day_per_person=float(req.budget_per_person_per_day),
+        outbound_pp=_price(req.selected_outbound_transport, "price"),
+        return_pp=_price(req.selected_return_transport, "price"),
+        hotel_total_per_room=_price(hotel, "total_price"),
+        hotel_nightly=_price(hotel, "nightly_price"),
+        rooms=req.rooms,
+    )
+    by_key = {l["key"]: l for l in detail["lines"]}
     return {
-        "outbound_transport_price": outbound_p,
-        "return_transport_price": return_p,
-        "hotel_total_price": hotel_p,
-        "food_and_activities_estimate": total_local,
-        "overall_total_estimate": overall_sum,
-        "per_person_estimate": per_person,
+        # keys older screens and saved history items already use
+        "outbound_transport_price": _price(req.selected_outbound_transport, "price"),
+        "return_transport_price": _price(req.selected_return_transport, "price"),
+        "hotel_total_price": by_key["stay"]["total"] if "stay" in by_key else None,
+        "food_and_activities_estimate": detail["estimate_total"],
+        "overall_total_estimate": detail["grand_total"],
+        "per_person_estimate": detail["per_person_total"],
         "currency": "INR",
-        "hotel_selected": hotel_p is not None,
-        "transport_selected": outbound_p is not None or return_p is not None
+        "hotel_selected": "stay" in by_key,
+        "transport_selected": "outbound" in by_key or "return" in by_key,
+        # full breakdown for the "View total price breakdown" panel
+        "detail": detail,
     }
 
 
@@ -365,6 +364,19 @@ class AIService:
 
     food_prefs_str = ", ".join(req.food_preferences) if req.food_preferences else "Authentic regional specialties"
 
+    schedule = list(req.area_schedule or [])
+    if schedule:
+      schedule_lines = "\n".join(f"Day {i + 1}: {a}" for i, a in enumerate(schedule))
+      area_block = (
+          "\nAREA SCHEDULE (the traveller stays in several places, so plan every day ONLY inside its area):\n"
+          f"{schedule_lines}\n"
+          "RULES: use only verified places whose \"area\" matches that day's area. On the first day in a new area, "
+          "start with the transfer from the previous area (check out, travel, check in) and keep that day lighter. "
+          "Keep each day's sights close together so travelling time stays low. Set \"area\" on every day.\n"
+      )
+    else:
+      area_block = ""
+
     prompt = f"""Generate an exceptionally detailed {req.duration_days}-day travel itinerary for:
 
 DESTINATION: {dest_name}
@@ -373,7 +385,7 @@ TRAVELLERS: {travelers} ({req.travel_group_type})
 BUDGET: ₹{per_day_per_person:,} per person/day (₹{trip_total:,} total estimate)
 PACE: {req.pace}
 INTERESTS: {', '.join(req.interests) if req.interests else 'Culture, Sights, Food'}
-
+{area_block}
 TRANSPORT & ACCOMMODATION CONSTRAINTS (TIME-AWARE):
 {transport_prompt_block}
 
@@ -394,6 +406,7 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
     {{
       "day_number": 1,
       "theme": "Old City History, Architecture, Culture & Culinary Highlights",
+      "area": "Name of the area this day is spent in",
       "estimated_day_cost": "₹{daily_total:,} total estimate",
       "morning": {{
         "time_window": "08:00 AM – 12:00 PM",
@@ -471,6 +484,7 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
         day = ItineraryDay(
             day_number=d.get("day_number", len(days) + 1),
             theme=d.get("theme", "Exploration"),
+            area=d.get("area") or (schedule[len(days)] if len(days) < len(schedule) else None),
             estimated_day_cost=d.get(
                 "estimated_day_cost", f"₹{daily_total:,} estimate"
             ),

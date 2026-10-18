@@ -7,6 +7,7 @@ Never fabricates booking URLs or flight facts.
 import hashlib
 import logging
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.models.transport import TransportOption
@@ -75,6 +76,37 @@ AIRPORT_MAP: Dict[str, List[str]] = {
     "los angeles": ["LAX"],
 }
 
+# More of the world's busiest cities, so typing the plain city name just works (no code needed)
+AIRPORT_MAP.update({
+    "manchester": ["MAN"], "birmingham": ["BHX"], "edinburgh": ["EDI"], "glasgow": ["GLA"], "dublin": ["DUB"],
+    "copenhagen": ["CPH"], "munich": ["MUC"], "munchen": ["MUC"], "frankfurt": ["FRA"], "berlin": ["BER"],
+    "hamburg": ["HAM"], "cologne": ["CGN"], "dusseldorf": ["DUS"], "stuttgart": ["STR"], "amsterdam": ["AMS"],
+    "brussels": ["BRU"], "madrid": ["MAD"], "barcelona": ["BCN"], "valencia": ["VLC"], "malaga": ["AGP"],
+    "seville": ["SVQ"], "palma": ["PMI"], "lisbon": ["LIS"], "porto": ["OPO"], "rome": ["FCO"],
+    "milan": ["MXP", "LIN"], "venice": ["VCE"], "florence": ["FLR"], "naples": ["NAP"], "bologna": ["BLQ"],
+    "zurich": ["ZRH"], "geneva": ["GVA"], "vienna": ["VIE"], "prague": ["PRG"], "budapest": ["BUD"],
+    "warsaw": ["WAW"], "krakow": ["KRK"], "bucharest": ["OTP"], "sofia": ["SOF"], "belgrade": ["BEG"],
+    "zagreb": ["ZAG"], "split": ["SPU"], "dubrovnik": ["DBV"], "athens": ["ATH"], "istanbul": ["IST"],
+    "stockholm": ["ARN"], "oslo": ["OSL"], "helsinki": ["HEL"], "reykjavik": ["KEF"], "nice": ["NCE"],
+    "lyon": ["LYS"], "marseille": ["MRS"],
+    "abu dhabi": ["AUH"], "sharjah": ["SHJ"], "muscat": ["MCT"], "riyadh": ["RUH"], "jeddah": ["JED"],
+    "kuwait city": ["KWI"], "tel aviv": ["TLV"], "amman": ["AMM"],
+    "kuala lumpur": ["KUL"], "hong kong": ["HKG"], "seoul": ["ICN", "GMP"], "osaka": ["KIX", "ITM"],
+    "beijing": ["PEK", "PKX"], "shanghai": ["PVG", "SHA"], "guangzhou": ["CAN"], "taipei": ["TPE"],
+    "manila": ["MNL"], "jakarta": ["CGK"], "bali": ["DPS"], "denpasar": ["DPS"], "hanoi": ["HAN"],
+    "ho chi minh city": ["SGN"], "saigon": ["SGN"], "phnom penh": ["PNH"], "phuket": ["HKT"],
+    "chiang mai": ["CNX"], "colombo": ["CMB"], "kathmandu": ["KTM"], "dhaka": ["DAC"], "male": ["MLE"],
+    "karachi": ["KHI"], "lahore": ["LHE"], "islamabad": ["ISB"],
+    "melbourne": ["MEL"], "brisbane": ["BNE"], "perth": ["PER"], "auckland": ["AKL"],
+    "vancouver": ["YVR"], "montreal": ["YUL"], "chicago": ["ORD"], "boston": ["BOS"], "washington": ["IAD", "DCA"],
+    "miami": ["MIA"], "seattle": ["SEA"], "las vegas": ["LAS"], "atlanta": ["ATL"], "dallas": ["DFW"],
+    "houston": ["IAH"], "orlando": ["MCO"], "philadelphia": ["PHL"], "san diego": ["SAN"], "denver": ["DEN"],
+    "mexico city": ["MEX"], "sao paulo": ["GRU"], "rio de janeiro": ["GIG"], "buenos aires": ["EZE"],
+    "lima": ["LIM"], "bogota": ["BOG"], "santiago": ["SCL"],
+    "cairo": ["CAI"], "johannesburg": ["JNB"], "cape town": ["CPT"], "nairobi": ["NBO"], "addis ababa": ["ADD"],
+    "casablanca": ["CMN"], "marrakech": ["RAK"], "mauritius": ["MRU"],
+})
+
 # Cities explicitly known to NOT have an operational commercial airport
 NO_AIRPORT_CITIES = {
     "rishikesh",
@@ -131,6 +163,110 @@ def resolve_city_to_airports(city_name: str) -> Tuple[List[str], Optional[str]]:
           " travel is recommended."
       ),
   )
+
+
+# ---------------------------------------------------------------- live airport lookup
+_AIRPORT_LOOKUP_TTL = 24 * 3600.0
+_airport_cache: Dict[str, Tuple[float, List[str], List[str]]] = {}
+MAX_AIRPORTS_PER_CITY = 3
+
+
+def pick_airports_from_autocomplete(data: Dict[str, Any], query: str) -> Tuple[List[str], List[str]]:
+  """Reads a SerpApi Google Flights Autocomplete response.
+
+  Returns (airport_codes, alternative_names).
+  A city is accepted only when its name (text before the first comma) equals what the user typed,
+  so a city is never guessed. When several cities share a name ("Manchester" in England and in
+  New Hampshire) the words the user added after the comma ("England", "United Kingdom") pick one.
+  Other cities that were found are returned as 'did you mean' alternatives.
+  """
+  wanted = _city_key(query)
+  qualifiers = [q.strip().lower() for q in query.split(",")[1:] if q.strip()]
+  best: Optional[Tuple[int, List[str]]] = None
+  alternatives: List[str] = []
+  for idx, sug in enumerate(data.get("suggestions") or []):
+    if not isinstance(sug, dict):
+      continue
+    name = str(sug.get("name") or "")
+    airports = [a for a in (sug.get("airports") or []) if isinstance(a, dict) and str(a.get("id") or "").strip()]
+    codes = [str(a["id"]).strip().upper() for a in airports]
+    if not codes and sug.get("type") == "airport":  # an airport listed on its own
+      code = str(sug.get("id") or "").strip().upper()
+      if len(code) == 3 and code.isalpha() and _city_key(name).startswith(wanted):
+        codes = [code]
+    if not codes:
+      continue
+    is_exact = _city_key(name) == wanted or (sug.get("type") == "airport" and _city_key(name).startswith(wanted))
+    if is_exact:
+      text = f"{name} {sug.get('description') or ''}".lower()
+      score = 100 - idx + 10 * sum(1 for q in qualifiers if q in text)
+      if best is None or score > best[0]:
+        best = (score, codes[:MAX_AIRPORTS_PER_CITY])
+    elif name and name not in alternatives:
+      alternatives.append(name)
+  return (best[1] if best else []), alternatives[:4]
+
+
+async def _lookup_codes_live(query: str) -> Tuple[List[str], List[str]]:
+  """One cached Google Flights autocomplete lookup. Only real answers are cached, never failures."""
+  key = query.strip().lower()
+  cached = _airport_cache.get(key)
+  if cached and time.time() - cached[0] < _AIRPORT_LOOKUP_TTL:
+    return cached[1], cached[2]
+  data = await serpapi_client.search({"engine": "google_flights_autocomplete", "q": query.strip(), "hl": "en"})
+  codes, alternatives = pick_airports_from_autocomplete(data, query)
+  if data.get("suggestions"):
+    _airport_cache[key] = (time.time(), codes, alternatives)
+  if not codes:
+    logger.info("Airport lookup for %r found no exact city; suggestions: %s", query,
+                [s.get("name") for s in (data.get("suggestions") or []) if isinstance(s, dict)][:6])
+  return codes, alternatives
+
+
+async def resolve_airports(city_name: str) -> Tuple[List[str], Optional[str]]:
+  """Airport codes for ANY city typed by name: built-in list, then Google Flights autocomplete,
+  then (for typos like 'Manchaster') the spelling Geoapify recognises. Never needs the IATA code."""
+  codes, notice = resolve_city_to_airports(city_name)
+  if codes:
+    return codes, None
+  key = _city_key(city_name)
+  if key in NO_AIRPORT_CITIES or not key:
+    return codes, notice  # explicit "no airport" answer
+
+  alternatives: List[str] = []
+  try:
+    live, alternatives = await _lookup_codes_live(city_name)
+    if live:
+      return live, None
+  except Exception as exc:  # no key, quota, network...
+    logger.info(f"Airport lookup unavailable for '{city_name}': {exc}")
+    return [], notice
+
+  # Spelling / wording the autocomplete did not recognise: ask for the canonical city name once
+  try:
+    from app.services.place_suggest_service import place_suggest_service
+    suggestions, _ = await place_suggest_service.suggest(city_name, 5)
+    for sug in suggestions:
+      if sug["kind"] != "city":
+        continue
+      canonical = sug["name"]
+      if _city_key(canonical) == key:
+        continue
+      qualified = ", ".join(x for x in (canonical, sug.get("state"), sug.get("country")) if x)
+      for attempt in (canonical, qualified):
+        mapped, _n = resolve_city_to_airports(attempt)
+        if mapped:
+          return mapped, None
+        live, more = await _lookup_codes_live(attempt)
+        if live:
+          return live, None
+        alternatives += [m for m in more if m not in alternatives]
+      break
+  except Exception as exc:
+    logger.info(f"Spelling check for '{city_name}' failed: {exc}")
+
+  hint = f" Did you mean: {', '.join(alternatives[:4])}?" if alternatives else ""
+  return [], f"No airport found for '{city_name.strip()}'.{hint}"
 
 
 class FlightService:
@@ -278,8 +414,8 @@ class FlightService:
 
     Returns (options, notice).
     """
-    origin_airports, orig_notice = resolve_city_to_airports(origin_city)
-    dest_airports, dest_notice = resolve_city_to_airports(dest_city)
+    origin_airports, orig_notice = await resolve_airports(origin_city)
+    dest_airports, dest_notice = await resolve_airports(dest_city)
 
     if orig_notice:
       return [], orig_notice

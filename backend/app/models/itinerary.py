@@ -18,6 +18,7 @@ class ItineraryRequest(BaseModel):
     budget_per_person_per_day: float = Field(3000, ge=1000, le=100000)
     travel_group_type: str = "solo"
     travelers_count: int = Field(1, ge=1, le=20)
+    rooms: Optional[int] = Field(None, ge=1, le=10, description="Hotel rooms; defaults to one per two travellers")
     radius_km: float = Field(5.0, ge=1.0, le=50.0)
     interests: List[str] = Field(default_factory=list)
     food_type: str = "no-preference"
@@ -25,6 +26,12 @@ class ItineraryRequest(BaseModel):
     pace: str = "moderate"
     transportation: str = "public"
     additional_preferences: Optional[str] = None
+    # Multi-area trips (country / state / city + nearby places)
+    areas: List[str] = Field(default_factory=list, description="Places to stay in, in visiting order")
+    scope_kind: Optional[Literal["city", "state", "country", "area"]] = None
+    arrival_city: Optional[str] = Field(None, description="City where the traveller lands (state/country trips)")
+    area_schedule: Optional[List[str]] = Field(None, description="Set by the server: the area for every day")
+    selected_hotels: Optional[List[Dict[str, Any]]] = None
 
 
 class ItineraryPlaceItem(BaseModel):
@@ -69,6 +76,7 @@ class ItineraryDay(BaseModel):
     afternoon: ItinerarySegment
     food_stop_dinner: FoodStop
     evening: ItinerarySegment
+    area: Optional[str] = Field(None, description="Where this day is spent (multi-area trips)")
 
 
 class ItineraryResponse(BaseModel):
@@ -90,4 +98,43 @@ class ItineraryResponse(BaseModel):
     sources: List[str]
     disclaimer: str
     data_mode: Literal["mock", "live"]
+    areas: List[str] = Field(default_factory=list)
+    stay_blocks: List[Dict[str, Any]] = Field(default_factory=list, description="Groups of days that share one hotel")
+    transfers: List[Dict[str, Any]] = Field(default_factory=list, description="Estimated travel between stays")
+    selected_hotels: Optional[List[Dict[str, Any]]] = None
+    notices: List[str] = Field(default_factory=list)
+
+
+class ScopeRequest(BaseModel):
+    destination: str = Field(..., min_length=2)
+    kind: Optional[Literal["city", "state", "country", "area"]] = None
+    duration_days: int = Field(3, ge=1, le=14)
+
+
+class ScopeResponse(BaseModel):
+    kind: Literal["city", "state", "country", "area"]
+    name: str
+    advice: str
+    recommended_areas: int
+    modes: List[Dict[str, str]] = Field(default_factory=list)
+    suggestions: List[Dict[str, str]] = Field(default_factory=list)
+    suggestions_title: str = ""
+    neighbours: List[Dict[str, str]] = Field(default_factory=list)
+    neighbours_title: str = ""
+    needs_arrival: bool = False
+    source: Literal["ai", "basic"] = "basic"
+
+
+class StayHotelChoice(BaseModel):
+    block_index: int = Field(..., ge=0)
+    hotel: Optional[Dict[str, Any]] = None
+
+
+class FinalizeRequest(BaseModel):
+    itinerary: ItineraryResponse
+    stay_hotels: List[StayHotelChoice] = Field(default_factory=list)
+    travelers_count: int = Field(1, ge=1, le=20)
+    rooms: Optional[int] = Field(None, ge=1, le=10)
+    budget_per_person_per_day: float = Field(3000, ge=1000, le=100000)
+    transportation: str = "public"
 

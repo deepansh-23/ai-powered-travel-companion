@@ -1,5 +1,5 @@
 /**
- * Smart Local Guide - Global Application Initializer.
+ * AI Powered Travel Companion - Global Application Initializer.
  */
 
 import { state } from "./state.js";

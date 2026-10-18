@@ -9,7 +9,7 @@ class TTSService:
     def synthesize_audio_payload(self, text: str) -> Dict[str, Any]:
         """Prepares audio synthesis response for frontend player."""
         return {
-            "application": "Smart Local Guide Audio",
+            "application": "AI Powered Travel Companion Audio",
             "status": "ready",
             "duration_seconds": max(5, int(len(text) / 15)),
             "message": "Audio synthesis placeholder ready.",

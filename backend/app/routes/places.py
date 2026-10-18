@@ -1,11 +1,20 @@
 """Places search API route."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.places import PlacesSearchRequest, PlacesSearchResponse
+from app.security import require_user_or_guest
+from app.services.place_suggest_service import place_suggest_service
 from app.services.geocoding_service import geocoding_service
 from app.services.places_service import places_service
 
 router = APIRouter(prefix="/api/places", tags=["Places"])
+
+
+@router.get("/suggest", dependencies=[Depends(require_user_or_guest)])
+async def suggest_places(q: str = ""):
+    """Type-ahead: countries, states and cities that match what the traveller has typed."""
+    suggestions, notice = await place_suggest_service.suggest(q)
+    return {"query": q.strip(), "suggestions": suggestions, "notice": notice}
 
 
 @router.post("/search", response_model=PlacesSearchResponse)

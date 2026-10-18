@@ -43,9 +43,11 @@ def _logged_in_by_default():
     """Feature tests run as a logged-in user; test_auth.py turns this off."""
     from app.db_models import User
     from app.main import app
-    from app.security import require_user
+    from app.security import require_user, require_user_or_guest
 
     fake = User(id="test-user-id", username="tester", username_lower="tester", password_hash="x")
     app.dependency_overrides[require_user] = lambda: fake
+    app.dependency_overrides[require_user_or_guest] = lambda: fake
     yield
     app.dependency_overrides.pop(require_user, None)
+    app.dependency_overrides.pop(require_user_or_guest, None)

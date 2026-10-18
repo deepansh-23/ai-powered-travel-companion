@@ -315,8 +315,9 @@ def test_itinerary_budget_calculations():
     resp = client.post("/api/itinerary/generate", json=payload)
     assert resp.status_code == 200
     data = resp.json()
-    # 2 people × ₹2000/day × 3 days = ₹12,000 total
-    assert "12,000" in data["estimated_budget_total"]
+    # 2 people × ₹2000/day × 3 days = ₹12,000 daily spending, plus the 10% contingency = ₹13,200
+    assert "13,200" in data["estimated_budget_total"]
+    assert data["cost_breakdown"]["detail"]["estimate_total"] == 13200
     assert "₹" in data["estimated_budget_total"]
     # Per-day label
     for day in data["days"]:

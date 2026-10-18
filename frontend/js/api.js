@@ -1,5 +1,5 @@
 /**
- * Smart Local Guide - API Client
+ * AI Powered Travel Companion - API Client
  * Centralized fetch handler for all backend endpoints.
  */
 
@@ -79,6 +79,23 @@ class ApiClient {
 
   logout() {
     return this._request("/api/auth/logout", { method: "POST", silent401: true });
+  }
+
+  // Guest session: use the planner without an account (nothing is saved to a profile)
+  startGuest(captchaToken) {
+    return this._request("/api/auth/guest", {
+      method: "POST",
+      body: JSON.stringify({ captcha_token: captchaToken || null })
+    });
+  }
+
+  // Permanently delete the logged-in account (password required)
+  deleteAccount(password) {
+    return this._request("/api/auth/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+      silent401: true
+    });
   }
 
   // Saved sessions (drafts a user can resume later)
@@ -192,6 +209,42 @@ class ApiClient {
       body: JSON.stringify(payload),
       signal
     });
+  }
+
+  // City / state / country questions for the destination
+  getItineraryScope(payload) {
+    return this._request("/api/itinerary/scope", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  // Adds the chosen hotel for each stay, directions and the budget to a generated plan
+  finalizeItinerary(payload) {
+    return this._request("/api/itinerary/finalize", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  // Type-ahead for countries, states and cities
+  suggestPlaces(query) {
+    return this._request(`/api/places/suggest?q=${encodeURIComponent(query)}`, { method: "GET", silent401: true });
+  }
+
+  // Cheapest flight on the chosen date and the 2 days either side
+  getFlightDatePrices(payload) {
+    return this._request("/api/transport/flight-dates", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  // Search flights + trains again for one leg on another date
+  searchTransportLeg(payload) {
+    return this._request("/api/transport/search-leg", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  // Railway stations of a city (for choosing exact stations)
+  searchStations(query) {
+    return this._request(`/api/transport/stations?q=${encodeURIComponent(query)}&limit=20`, { method: "GET" });
   }
 
   // Provider booking options for a selected flight (Section 11)
