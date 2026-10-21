@@ -22,12 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_db
 from app.db_models import User
+from app.security import derive_fallback_secret
 from app.services import auth_service
 
 ADMIN_STEPUP_COOKIE = "slg_admin_stepup"
-STEPUP_LIFETIME_SECONDS = 15 * 60  # 15 minutes
+STEPUP_LIFETIME_SECONDS = 30 * 60   # idle timeout: renewed while the admin keeps using the dashboard
+STEPUP_RENEW_BELOW_SECONDS = 20 * 60  # re-issue the cookie once less than this is left
 
-_FALLBACK_ADMIN_SECRET = secrets.token_hex(32)
+_FALLBACK_ADMIN_SECRET = derive_fallback_secret("admin-stepup")
 
 
 def _stepup_secret() -> bytes:
@@ -35,7 +37,7 @@ def _stepup_secret() -> bytes:
 
 
 def issue_admin_stepup_token(user_id: str) -> Tuple[str, int]:
-    """Issue a signed, short-lived step-up token valid for 15 minutes."""
+    """Issue a signed step-up token valid for STEPUP_LIFETIME_SECONDS."""
     expires = int(time.time()) + STEPUP_LIFETIME_SECONDS
     nonce = secrets.token_hex(8)
     payload = f"{user_id}.{expires}.{nonce}"
@@ -58,6 +60,13 @@ def is_valid_admin_stepup(token: Optional[str], user_id: str) -> bool:
         return False
     expected = hmac.new(_stepup_secret(), f"{tok_user_id}.{expires_str}.{nonce}".encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(sig, expected)
+
+
+def stepup_seconds_left(token: Optional[str]) -> int:
+    try:
+        return max(0, int(token.split(".")[1]) - int(time.time()))  # token = user.expires.nonce.sig
+    except Exception:
+        return 0
 
 
 def set_admin_stepup_cookie(request: Request, response: Response, token: str) -> None:
@@ -124,7 +133,7 @@ async def require_admin_basic(request: Request, db: AsyncSession = Depends(get_d
     return user
 
 
-async def require_admin(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+async def require_admin(request: Request, response: Response, db: AsyncSession = Depends(get_db)) -> User:
     """FastAPI dependency: allow only authenticated admin users with active step-up.
 
     - Unauthenticated -> 401
@@ -141,5 +150,10 @@ async def require_admin(request: Request, db: AsyncSession = Depends(get_db)) ->
             detail="Step-up re-authentication required.",
             headers={"X-Admin-Reauth-Required": "true"},
         )
+
+    # Sliding idle timeout: an admin who keeps working is not asked for the password again.
+    if stepup_seconds_left(stepup_token) < STEPUP_RENEW_BELOW_SECONDS:
+        fresh, _ = issue_admin_stepup_token(user.id)
+        set_admin_stepup_cookie(request, response, fresh)
 
     return user

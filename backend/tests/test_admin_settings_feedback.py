@@ -222,3 +222,44 @@ async def test_diagnostics_are_sanitized_and_bounded():
         assert "203.0.113.77" not in str(d)
         assert (await c.get("/api/admin/diagnostics?limit=500")).status_code == 422
     assert metrics_tracker.diagnostics.maxlen == 300
+
+
+# ───────────────────────────── stay signed in ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_stepup_is_renewed_while_admin_is_active():
+    from admin import permissions
+    uid, token = await _make_user("sliding", True)
+    # a token that is valid but close to expiring
+    old, _ = permissions.issue_admin_stepup_token(uid)
+    parts = old.split(".")
+    soon = int(__import__("time").time()) + 60
+    import hmac, hashlib
+    payload = f"{uid}.{soon}.{parts[2]}"
+    sig = hmac.new(permissions._stepup_secret(), payload.encode(), hashlib.sha256).hexdigest()
+    near_expiry = f"{payload}.{sig}"
+    assert permissions.is_valid_admin_stepup(near_expiry, uid)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test",
+                           cookies={settings.AUTH_COOKIE_NAME: token, ADMIN_STEPUP_COOKIE: near_expiry}) as c:
+        r = await c.get("/api/admin/settings")
+        assert r.status_code == 200
+        header = r.headers.get("set-cookie", "")
+        assert ADMIN_STEPUP_COOKIE in header                              # fresh cookie issued
+        fresh = header.split(f"{ADMIN_STEPUP_COOKIE}=")[1].split(";")[0]
+        assert permissions.stepup_seconds_left(fresh) > 25 * 60
+
+
+def test_signing_secret_is_stable_without_auth_secret():
+    from app.security import derive_fallback_secret
+    assert derive_fallback_secret("admin-stepup") == derive_fallback_secret("admin-stepup")
+
+
+@pytest.mark.asyncio
+async def test_maintenance_also_pauses_signup_and_guest():
+    async with await _admin_client() as admin:
+        await admin.put("/api/admin/settings", json={"maintenance_mode": True, "confirm_disruptive": True})
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as anon:
+            assert (await anon.post("/api/auth/register", json={"username": "x" * 5, "password": "Password123#"})).status_code == 503
+            assert (await anon.post("/api/auth/guest", json={})).status_code == 503
+            assert (await anon.get("/api/auth/me")).status_code == 200   # login page + banner still work

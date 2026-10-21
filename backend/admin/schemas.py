@@ -92,7 +92,7 @@ class StepupRequest(BaseModel):
 class StepupResponse(BaseModel):
     success: bool
     expires_at: int
-    message: str = "Admin authorization granted for 15 minutes."
+    message: str = "Admin authorization granted for 30 minutes of activity."
 
 
 class AdminAuthStatusResponse(BaseModel):

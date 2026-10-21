@@ -133,7 +133,7 @@ async def admin_stepup(
     response: Response,
     admin: User = Depends(require_admin_basic),
 ):
-    """Verify admin password to grant a short-lived step-up session (15 minutes).
+    """Verify admin password to grant a short-lived step-up session (30 minutes, renewed while active).
 
     Rate-limited to prevent brute-forcing. Does not invalidate normal login on failure.
     """

@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.config import settings
-from app.db import db_status, get_db
+from app.db import db_status, session_scope
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,8 @@ MAINTENANCE_ALLOWED_PREFIXES = (
     "/api/health",
     "/api/captcha",
 )
+# ...except these: new accounts and guest sessions are "public access" and stay paused.
+MAINTENANCE_BLOCKED_PREFIXES = ("/api/auth/register", "/api/auth/guest")
 
 
 async def load_settings() -> dict:
@@ -37,7 +39,7 @@ async def load_settings() -> dict:
     if cached is not None:
         return cached
     try:
-        async for db in get_db():
+        async with session_scope() as db:
             return await service.get_cached_settings(db)
     except Exception:
         logger.warning("Could not load site settings; using defaults.")
@@ -51,18 +53,19 @@ async def _is_admin_request(request: Request) -> bool:
     if not raw:
         return False
     try:
-        async for db in get_db():
+        async with session_scope() as db:
             user = await auth_service.get_user_for_token(db, raw)
             return bool(user and getattr(user, "is_admin", False))
     except Exception:
         return False
-    return False
 
 
 class MaintenanceModeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if not path.startswith("/api") or path.startswith(MAINTENANCE_ALLOWED_PREFIXES):
+        if not path.startswith("/api"):
+            return await call_next(request)
+        if path.startswith(MAINTENANCE_ALLOWED_PREFIXES) and not path.startswith(MAINTENANCE_BLOCKED_PREFIXES):
             return await call_next(request)
         try:
             current = await load_settings()

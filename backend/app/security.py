@@ -20,7 +20,19 @@ CAPTCHA_COOKIE = "slg_human"
 # ---------------------------------------------------------------- guest sessions
 # A guest session is a signed, expiring cookie. It proves "this browser chose guest mode"
 # so the planner and search tools work, but it is never linked to a user profile.
-_FALLBACK_GUEST_SECRET = secrets.token_hex(32)
+def derive_fallback_secret(label: str) -> str:
+    """Signing key used when AUTH_SECRET is not set.
+
+    A random per-process key logs everyone out on every restart (and between workers), so derive a
+    stable key from the database credentials instead. Set AUTH_SECRET in production for a dedicated key.
+    """
+    base = settings.DB_PASSWORD or settings.DATABASE_URL or ""
+    if base:
+        return hashlib.sha256(f"slg|{label}|{base}".encode()).hexdigest()
+    return secrets.token_hex(32)
+
+
+_FALLBACK_GUEST_SECRET = derive_fallback_secret("guest")
 
 
 def _guest_secret() -> bytes:

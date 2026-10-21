@@ -5,6 +5,7 @@ If no database is configured the app still starts; only features that need
 accounts return a clear 503 message.
 """
 
+import contextlib
 import logging
 import ssl
 import time
@@ -149,6 +150,20 @@ async def get_db() -> AsyncIterator[AsyncSession]:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Accounts are temporarily unavailable (database not connected). Please try again later.",
         )
+    get_engine()
+    assert _session_factory is not None
+    async with _session_factory() as session:
+        yield session
+
+
+@contextlib.asynccontextmanager
+async def session_scope():
+    """Short-lived session that is always closed (for middleware / helpers outside Depends)."""
+    if not is_configured():
+        raise RuntimeError("database not configured")
+    await ensure_ready()
+    if _init_error:
+        raise RuntimeError("database not ready")
     get_engine()
     assert _session_factory is not None
     async with _session_factory() as session:
