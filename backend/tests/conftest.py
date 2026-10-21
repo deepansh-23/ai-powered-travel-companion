@@ -34,8 +34,11 @@ def _isolated_database(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setattr(settings, "DB_HOST", None)
     db.reset_for_tests()
+    from admin import service as _admin_service
+    _admin_service.invalidate_settings_cache()  # settings cache must not leak between test databases
     yield
     db.reset_for_tests()
+    _admin_service.invalidate_settings_cache()
 
 
 @pytest.fixture(autouse=True)

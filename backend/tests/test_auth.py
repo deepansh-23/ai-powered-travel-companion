@@ -223,7 +223,10 @@ def test_accounts_unavailable_message_when_database_missing(monkeypatch):
     monkeypatch.setattr(settings, "DB_HOST", None)
     db.reset_for_tests()
     with TestClient(app) as c:
-        assert c.get("/api/auth/me").json() == {"authenticated": False, "user": None, "accounts_available": False}
+        me_data = c.get("/api/auth/me").json()
+        assert me_data["authenticated"] is False
+        assert me_data["user"] is None
+        assert me_data["accounts_available"] is False
         r = c.post("/api/auth/login", json={"username": "a", "password": "b"})
         assert r.status_code == 503 and "unavailable" in r.json()["detail"].lower()
         assert c.get("/api/health").json()["database"] == {"configured": False, "ready": False}

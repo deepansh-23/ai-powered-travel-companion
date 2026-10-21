@@ -342,6 +342,13 @@ class ApiClient {
       body: JSON.stringify({ text })
     });
   }
+
+  adminLogin(username, password, captcha_token) {
+    return this._request("/api/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password, captcha_token })
+    });
+  }
 }
 
 

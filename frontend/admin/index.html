@@ -6,11 +6,24 @@
   <title>Admin Control Center — AI Powered Travel Companion</title>
   <meta name="description" content="Secure admin dashboard for AI Powered Travel Companion.">
   <meta name="robots" content="noindex, nofollow">
+  <!-- Anti-theme-flicker script: executes before body renders -->
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('adm_theme') || 'dark';
+        var isLight = saved === 'light' || (saved === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+        if (isLight) {
+          document.documentElement.classList.add('adm-theme-light');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
   <!-- Admin-only stylesheet — completely isolated from main app -->
   <link rel="stylesheet" href="/admin/admin.css">
+  <link rel="stylesheet" href="/admin/admin-settings.css">
 </head>
 <!-- adm-body class scopes all admin CSS selectors -->
 <body class="adm-body">
@@ -55,28 +68,24 @@
 
       <div class="adm-nav-section">System</div>
 
-      <button class="adm-nav-item placeholder" data-page="monitoring" title="Coming soon" aria-label="API Monitoring — placeholder">
+      <button class="adm-nav-item" data-page="monitoring" aria-label="API Monitoring">
         <span class="adm-nav-icon">📡</span>
         API Monitoring
-        <span class="adm-nav-badge">Soon</span>
       </button>
 
-      <button class="adm-nav-item placeholder" data-page="health" title="Coming soon" aria-label="System Health — placeholder">
+      <button class="adm-nav-item" data-page="health" aria-label="System Health">
         <span class="adm-nav-icon">❤️</span>
         System Health
-        <span class="adm-nav-badge">Soon</span>
       </button>
 
-      <button class="adm-nav-item placeholder" data-page="settings" title="Coming soon" aria-label="Settings — placeholder">
+      <button class="adm-nav-item" data-page="settings" aria-label="Settings">
         <span class="adm-nav-icon">⚙️</span>
         Settings
-        <span class="adm-nav-badge">Soon</span>
       </button>
 
-      <button class="adm-nav-item placeholder" data-page="feedback" title="Coming soon" aria-label="Feedback — placeholder">
+      <button class="adm-nav-item" data-page="feedback" aria-label="Feedback and Diagnostics">
         <span class="adm-nav-icon">💬</span>
         Feedback &amp; Diagnostics
-        <span class="adm-nav-badge">Soon</span>
       </button>
     </nav>
 
@@ -102,6 +111,15 @@
         <h1 id="admPageTitle" class="adm-header-title">Overview</h1>
       </div>
       <div class="adm-header-right">
+        <!-- Admin theme selector -->
+        <div class="adm-theme-select-wrap">
+          <label for="admThemeSelect" class="sr-only" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">Theme</label>
+          <select id="admThemeSelect" class="adm-theme-select" aria-label="Select admin theme">
+            <option value="dark">🌙 Dark</option>
+            <option value="light">☀️ Light</option>
+            <option value="system">💻 System</option>
+          </select>
+        </div>
         <div class="adm-admin-chip" aria-label="Admin account indicator">
           <span class="adm-admin-chip-dot"></span>
           <span id="admAdminName">Admin</span>
@@ -227,60 +245,242 @@
       </div>
     </section>
 
-    <!-- ── Placeholder Pages ───────────────────────────────────────────── -->
-    <section id="page-monitoring" class="adm-page" aria-label="API Monitoring (placeholder)">
+    <!-- ── API Monitoring Page ────────────────────────────────────────── -->
+    <section id="page-monitoring" class="adm-page" aria-label="API Monitoring">
       <div class="adm-page-header">
         <h2 class="adm-page-title">API Monitoring</h2>
-        <p class="adm-page-subtitle">Track external API usage and rate limit status.</p>
+        <p class="adm-page-subtitle" id="admMonSubtitle">Real in-memory traffic metrics and response durations.</p>
       </div>
-      <div class="adm-placeholder-box">
-        <div class="adm-placeholder-icon">📡</div>
-        <div class="adm-placeholder-title">Coming Soon</div>
-        <div class="adm-placeholder-desc">
-          API monitoring and usage charts are planned for a future release.
-          This section will show Geoapify, Gemini, SerpAPI and RailRadar call volumes.
+
+      <div class="adm-mon-toolbar">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="adm-pill-group" role="group" aria-label="Time window selector">
+            <button class="adm-pill-btn active" id="admMonWin15m" data-win="15m">Last 15 Minutes</button>
+            <button class="adm-pill-btn" id="admMonWin24h" data-win="24h">Last 24 Hours</button>
+          </div>
+          <span style="font-size:12px;color:var(--adm-text-muted);" id="admMonProcessInfo">In-memory process metrics</span>
+        </div>
+
+        <div class="adm-mon-actions">
+          <label for="admMonAutoRefresh" style="font-size:12px;color:var(--adm-text-muted);">Auto-refresh:</label>
+          <select id="admMonAutoRefresh" class="adm-select" style="font-size:12px;padding:4px 8px;" aria-label="Auto refresh interval">
+            <option value="0">Off</option>
+            <option value="15">Every 15s</option>
+            <option value="30" selected>Every 30s</option>
+            <option value="60">Every 60s</option>
+          </select>
+          <button id="admMonRefreshBtn" class="adm-refresh-btn" aria-label="Refresh API metrics">
+            ↻ Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div id="admMonCards" class="adm-mon-grid" aria-live="polite">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Two-column tables: Slowest Endpoints & Top Errors -->
+      <div class="adm-two-col">
+        <div class="adm-table-wrap">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--adm-border);font-weight:600;font-size:14px;color:var(--adm-text);display:flex;align-items:center;justify-content:space-between;">
+            <span>⏱️ Slowest Endpoints</span>
+            <small style="color:var(--adm-text-muted);font-weight:normal;font-size:11px;">By avg response time</small>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="adm-table" aria-label="Slowest endpoints table">
+              <thead>
+                <tr>
+                  <th>Endpoint</th>
+                  <th>Avg Time</th>
+                  <th>Max Time</th>
+                  <th>Calls</th>
+                </tr>
+              </thead>
+              <tbody id="admMonSlowestTbody">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="adm-table-wrap">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--adm-border);font-weight:600;font-size:14px;color:var(--adm-text);display:flex;align-items:center;justify-content:space-between;">
+            <span>⚠️ Endpoints With Most Errors</span>
+            <small style="color:var(--adm-text-muted);font-weight:normal;font-size:11px;">4xx &amp; 5xx responses</small>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="adm-table" aria-label="Most error endpoints table">
+              <thead>
+                <tr>
+                  <th>Endpoint</th>
+                  <th>Error Count</th>
+                  <th>Last HTTP Status</th>
+                </tr>
+              </thead>
+              <tbody id="admMonErrorsTbody">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Failures Table -->
+      <div class="adm-table-wrap">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--adm-border);font-weight:600;font-size:14px;color:var(--adm-text);display:flex;align-items:center;justify-content:space-between;">
+          <span>🚨 Recent API Failures</span>
+          <small style="color:var(--adm-text-muted);font-weight:normal;font-size:11px;">Latest 30 failures</small>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="adm-table" aria-label="Recent API failures table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Method</th>
+                <th>Endpoint Path</th>
+                <th>Status Code</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="admMonFailuresTbody">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
 
-    <section id="page-health" class="adm-page" aria-label="System Health (placeholder)">
+    <!-- ── System Health Page ─────────────────────────────────────────── -->
+    <section id="page-health" class="adm-page" aria-label="System Health">
       <div class="adm-page-header">
         <h2 class="adm-page-title">System Health</h2>
-        <p class="adm-page-subtitle">Server uptime, response times and error rates.</p>
+        <p class="adm-page-subtitle">Real-time status of application runtime, database connectivity, and critical dependencies.</p>
       </div>
-      <div class="adm-placeholder-box">
-        <div class="adm-placeholder-icon">❤️</div>
-        <div class="adm-placeholder-title">Coming Soon</div>
-        <div class="adm-placeholder-desc">
-          System health metrics, request latency, and error monitoring are planned for a future release.
+
+      <!-- Health Hero Banner -->
+      <div id="admHealthBanner" class="adm-health-banner" aria-live="polite">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Health Cards Grid -->
+      <div id="admHealthCards" class="adm-health-grid" aria-live="polite">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Dependencies Table -->
+      <div class="adm-table-wrap">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--adm-border);font-weight:600;font-size:14px;color:var(--adm-text);display:flex;align-items:center;justify-content:space-between;">
+          <span>🔌 Infrastructure &amp; Dependency Status</span>
+          <button id="admHealthRefreshBtn" class="adm-refresh-btn" aria-label="Check system health again">
+            ↻ Check Now
+          </button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="adm-table" aria-label="Dependencies health table">
+            <thead>
+              <tr>
+                <th>Dependency</th>
+                <th>Status</th>
+                <th>Diagnostics &amp; Configuration</th>
+              </tr>
+            </thead>
+            <tbody id="admHealthDepsTbody">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
 
-    <section id="page-settings" class="adm-page" aria-label="Settings (placeholder)">
+    <!-- ── Settings Page ───────────────────────────────────────────────── -->
+    <section id="page-settings" class="adm-page" aria-label="Settings">
       <div class="adm-page-header">
         <h2 class="adm-page-title">Settings</h2>
-        <p class="adm-page-subtitle">Application configuration.</p>
+        <p class="adm-page-subtitle" id="admSetUpdated">Loading…</p>
       </div>
-      <div class="adm-placeholder-box">
-        <div class="adm-placeholder-icon">⚙️</div>
-        <div class="adm-placeholder-title">Coming Soon</div>
-        <div class="adm-placeholder-desc">
-          Application settings management is planned for a future release.
-        </div>
+      <div id="admSetBody" class="adm-set-grid" aria-live="polite"></div>
+      <div class="adm-set-actions" style="max-width:760px;">
+        <button id="admSetSave" class="adm-btn adm-btn-primary" disabled>Save changes</button>
+        <button id="admSetCancel" class="adm-btn adm-btn-ghost" disabled>Cancel</button>
+        <span id="admSetStatus" class="adm-set-status" role="status"></span>
+      </div>
+      <div class="adm-set-secrets">
+        🔒 API keys, database credentials and other secrets are never shown or editable here.
+        They stay in the server environment (Render) only.
       </div>
     </section>
 
-    <section id="page-feedback" class="adm-page" aria-label="Feedback & Diagnostics (placeholder)">
+    <!-- ── Feedback & Diagnostics Page ─────────────────────────────────── -->
+    <section id="page-feedback" class="adm-page" aria-label="Feedback and Diagnostics">
       <div class="adm-page-header">
         <h2 class="adm-page-title">Feedback &amp; Diagnostics</h2>
-        <p class="adm-page-subtitle">User feedback overview and diagnostics.</p>
+        <p class="adm-page-subtitle">Real user reviews and sanitized application errors.</p>
       </div>
-      <div class="adm-placeholder-box">
-        <div class="adm-placeholder-icon">💬</div>
-        <div class="adm-placeholder-title">Coming Soon</div>
-        <div class="adm-placeholder-desc">
-          A feedback analytics view and diagnostic tools are planned for a future release.
+      <div class="adm-tabs">
+        <div class="adm-pill-group">
+          <button class="adm-pill-btn active" id="admFbTabFeedback" data-fbtab="feedback">Feedback</button>
+          <button class="adm-pill-btn" id="admFbTabDiag" data-fbtab="diagnostics">Diagnostics</button>
+        </div>
+      </div>
+
+      <div id="admFbPanel">
+        <div id="admFbSummary" class="adm-fb-summary" aria-live="polite"></div>
+        <div class="adm-table-wrap">
+          <div class="adm-table-toolbar">
+            <div class="adm-search-wrap">
+              <span class="adm-search-icon">🔍</span>
+              <input id="admFbSearch" class="adm-search" type="search" placeholder="Search comment, service or user…" aria-label="Search feedback" maxlength="100">
+            </div>
+            <select id="admFbService" class="adm-select" aria-label="Filter by service">
+              <option value="">All services</option>
+              <option>Overall Website</option><option>Itinerary Planner</option><option>Places Near You</option>
+              <option>Area Guide</option><option>Quiet Work Cafés</option><option>24/7 Medical Care</option>
+            </select>
+            <select id="admFbStatus" class="adm-select" aria-label="Filter by status">
+              <option value="">All statuses</option>
+              <option value="pending">Pending</option><option value="reviewed">Reviewed</option><option value="resolved">Resolved</option>
+            </select>
+            <select id="admFbRating" class="adm-select" aria-label="Filter by rating">
+              <option value="">All ratings</option>
+              <option value="5">5 ★</option><option value="4">4 ★</option><option value="3">3 ★</option><option value="2">2 ★</option><option value="1">1 ★</option>
+            </select>
+            <button id="admFbRefresh" class="adm-refresh-btn" aria-label="Refresh feedback">↻ Refresh</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="adm-table" aria-label="Feedback table">
+              <thead><tr><th>Date</th><th>User</th><th>Rating</th><th>Service</th><th>Comment</th><th>Status</th></tr></thead>
+              <tbody id="admFbTbody" aria-live="polite"></tbody>
+            </table>
+          </div>
+          <div id="admFbPager" class="adm-pagination" aria-label="Pagination"></div>
+        </div>
+      </div>
+
+      <div id="admDiagPanel" hidden>
+        <div id="admDiagSummary" class="adm-fb-summary" aria-live="polite"></div>
+        <div class="adm-table-wrap">
+          <div class="adm-table-toolbar">
+            <div class="adm-search-wrap">
+              <span class="adm-search-icon">🔍</span>
+              <input id="admDiagSearch" class="adm-search" type="search" placeholder="Search endpoint, method or status…" aria-label="Search diagnostics" maxlength="100">
+            </div>
+            <select id="admDiagLevel" class="adm-select" aria-label="Filter by error class">
+              <option value="all">All errors</option><option value="4xx">4xx client errors</option><option value="5xx">5xx server errors</option>
+            </select>
+            <button id="admDiagRefresh" class="adm-refresh-btn" aria-label="Refresh diagnostics">↻ Refresh</button>
+            <div class="adm-diag-links">
+              <button class="adm-btn adm-btn-ghost" onclick="admNavigate('monitoring')">API Monitoring →</button>
+              <button class="adm-btn adm-btn-ghost" onclick="admNavigate('health')">System Health →</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="adm-table" aria-label="Diagnostics table">
+              <thead><tr><th>Time</th><th>Method</th><th>Endpoint</th><th>Status</th><th>Summary</th><th>Duration</th><th>Client</th></tr></thead>
+              <tbody id="admDiagTbody" aria-live="polite"></tbody>
+            </table>
+          </div>
+          <div class="adm-set-desc" style="padding:10px 14px;">Stored in memory only (last 300 errors, cleared on restart). No request bodies, cookies, tokens or full IP addresses are recorded.</div>
         </div>
       </div>
     </section>
@@ -289,6 +489,26 @@
 </div><!-- /.adm-layout -->
 
 </div><!-- #admGate -->
+
+<!-- ── Step-Up Re-Authentication Modal ───────────────────────────────── -->
+<div id="admStepupModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="Admin re-authentication" style="z-index:9999;">
+  <div class="adm-modal" style="max-width:400px;">
+    <div class="adm-stepup-icon">🔒</div>
+    <h3 class="adm-stepup-title">Re-Authentication Required</h3>
+    <p class="adm-stepup-desc">Please enter your administrator account password to unlock access for this session (valid for 15 minutes).</p>
+    <form id="admStepupForm" onsubmit="return false;">
+      <div class="adm-field">
+        <label class="adm-label" for="admStepupPassword">Password</label>
+        <input class="adm-input" id="admStepupPassword" type="password" autocomplete="current-password" placeholder="Enter password" required maxlength="128">
+      </div>
+      <div id="admStepupError" style="color:var(--adm-red);font-size:12px;margin-top:8px;line-height:1.4;" hidden></div>
+      <div class="adm-modal-actions" style="margin-top:20px;">
+        <a href="/" class="adm-btn adm-btn-ghost" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;">Exit to Site</a>
+        <button type="submit" id="admStepupSubmitBtn" class="adm-btn adm-btn-primary">Unlock Dashboard</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- ── User Detail Modal ──────────────────────────────────────────────── -->
 <div id="admUserModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="User detail">
@@ -326,9 +546,33 @@
   </div>
 </div>
 
+<!-- ── Feedback Detail Modal ──────────────────────────────────────────── -->
+<div id="admFbModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="Feedback detail">
+  <div class="adm-modal">
+    <div class="adm-modal-header">
+      <span class="adm-modal-title">Feedback Details</span>
+      <button class="adm-modal-close" onclick="admCloseFbModal()" aria-label="Close">✕</button>
+    </div>
+    <div id="admFbModalBody"></div>
+  </div>
+</div>
+
+<!-- ── Settings Confirm Dialog ────────────────────────────────────────── -->
+<div id="admSetConfirmModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm setting change">
+  <div class="adm-modal" style="max-width:460px;">
+    <div class="adm-modal-header"><span class="adm-modal-title" style="color:var(--adm-yellow);">⚠️ Confirm setting change</span></div>
+    <p class="adm-confirm-text" id="admSetConfirmText"></p>
+    <div class="adm-modal-actions">
+      <button id="admSetConfirmOk" class="adm-btn adm-btn-warning">Apply changes</button>
+      <button id="admSetConfirmCancel" class="adm-btn adm-btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Toast container ────────────────────────────────────────────────── -->
 <div id="admToast" class="adm-toast-container" aria-live="assertive" aria-atomic="true"></div>
 
 <script src="/admin/admin.js"></script>
+<script src="/admin/admin-settings.js"></script>
 </body>
 </html>

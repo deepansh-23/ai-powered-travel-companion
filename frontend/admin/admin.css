@@ -55,6 +55,39 @@ body.adm-body {
   --adm-transition: 0.18s ease;
 }
 
+/* ── Light Theme Overrides ───────────────────────────────────────────── */
+html.adm-theme-light body.adm-body,
+body.adm-body.adm-theme-light {
+  background: #f6f8fa;
+  color: #1f2328;
+  --adm-bg: #f6f8fa;
+  --adm-surface: #ffffff;
+  --adm-surface2: #f6f8fa;
+  --adm-surface3: #eaeef2;
+  --adm-border: #d0d7de;
+  --adm-border-subtle: #e1e4e8;
+
+  --adm-accent: #0969da;
+  --adm-accent-dim: #ddf4ff;
+  --adm-accent-glow: rgba(9, 105, 218, 0.12);
+
+  --adm-green: #1a7f37;
+  --adm-green-dim: #dafbe1;
+  --adm-red: #cf222e;
+  --adm-red-dim: #ffebe9;
+  --adm-yellow: #9a6700;
+  --adm-yellow-dim: #fff8c5;
+  --adm-purple: #8250df;
+  --adm-purple-dim: #fbefff;
+
+  --adm-text: #1f2328;
+  --adm-text-muted: #57606a;
+  --adm-text-subtle: #8c959f;
+
+  --adm-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  --adm-shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
+}
+
 /* ── Layout ─────────────────────────────────────────────────────────── */
 .adm-layout {
   display: flex;
@@ -845,3 +878,239 @@ table.adm-table {
   .adm-table th:nth-child(n+4),
   .adm-table td:nth-child(n+4) { display: none; }
 }
+
+/* ── Theme Selector in Header ────────────────────────────────────────── */
+.adm-theme-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.adm-theme-select {
+  background: var(--adm-surface2);
+  color: var(--adm-text);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius);
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--adm-transition);
+}
+.adm-theme-select:focus {
+  border-color: var(--adm-accent);
+}
+
+/* ── Step-up Re-authentication Modal ─────────────────────────────────── */
+.adm-stepup-icon {
+  width: 52px;
+  height: 52px;
+  background: var(--adm-accent-dim);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin: 0 auto 16px;
+  color: var(--adm-accent);
+}
+.adm-stepup-title {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--adm-text);
+}
+.adm-stepup-desc {
+  text-align: center;
+  font-size: 13px;
+  color: var(--adm-text-muted);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+/* ── API Monitoring Components ───────────────────────────────────────── */
+.adm-mon-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.adm-pill-group {
+  display: inline-flex;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius);
+  padding: 3px;
+  gap: 3px;
+}
+.adm-pill-btn {
+  background: none;
+  border: none;
+  color: var(--adm-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all var(--adm-transition);
+}
+.adm-pill-btn.active {
+  background: var(--adm-accent);
+  color: #fff;
+}
+.adm-mon-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.adm-mon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.adm-mon-card {
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius);
+  padding: 16px;
+}
+.adm-mon-card-label {
+  font-size: 12px;
+  color: var(--adm-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.adm-mon-card-val {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--adm-text);
+  margin-bottom: 4px;
+}
+.adm-mon-card-sub {
+  font-size: 11px;
+  color: var(--adm-text-subtle);
+}
+.adm-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px) {
+  .adm-two-col { grid-template-columns: 1fr; }
+}
+
+.adm-http-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: monospace;
+}
+.adm-http-badge.s2xx {
+  background: var(--adm-green-dim);
+  color: var(--adm-green);
+}
+.adm-http-badge.s4xx {
+  background: var(--adm-yellow-dim);
+  color: var(--adm-yellow);
+}
+.adm-http-badge.s5xx {
+  background: var(--adm-red-dim);
+  color: var(--adm-red);
+}
+
+/* ── System Health Components ────────────────────────────────────────── */
+.adm-health-banner {
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.adm-health-status-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.adm-pulse-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+}
+.adm-pulse-dot.healthy {
+  background: var(--adm-green);
+  box-shadow: 0 0 0 4px var(--adm-green-dim);
+}
+.adm-pulse-dot.degraded {
+  background: var(--adm-yellow);
+  box-shadow: 0 0 0 4px var(--adm-yellow-dim);
+}
+.adm-pulse-dot.unavailable {
+  background: var(--adm-red);
+  box-shadow: 0 0 0 4px var(--adm-red-dim);
+}
+.adm-health-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--adm-text);
+}
+.adm-health-desc {
+  font-size: 13px;
+  color: var(--adm-text-muted);
+  margin: 0;
+}
+.adm-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.adm-health-card {
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius);
+  padding: 18px;
+}
+.adm-health-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.adm-health-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--adm-text);
+}
+.adm-health-stat-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--adm-border-subtle);
+}
+.adm-health-stat-line:last-child {
+  border-bottom: none;
+}
+.adm-health-stat-label {
+  color: var(--adm-text-muted);
+}
+.adm-health-stat-value {
+  color: var(--adm-text);
+  font-weight: 500;
+}
+

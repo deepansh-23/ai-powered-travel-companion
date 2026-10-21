@@ -156,6 +156,12 @@ class AuthManager {
 
         <p class="welcome-create">New here? <a href="${pagePath("login.html")}?tab=register&next=${encodeURIComponent(location.pathname + location.search)}">Create a free account</a></p>
 
+        <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--color-border,#e5e7eb);text-align:center;">
+          <button type="button" class="btn-link" id="welcomeAdminLogin" style="background:none;border:none;color:var(--color-text-muted,#6b7280);font-size:0.84rem;cursor:pointer;padding:4px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:5px;">
+            <span aria-hidden="true">🛡️</span> Admin Login
+          </button>
+        </div>
+
         <div class="welcome-note" id="welcomeNote">
           <strong>Guest session</strong>
           <span>${escapeHtml(GUEST_LIMITS_NOTE)}</span>
@@ -164,10 +170,15 @@ class AuthManager {
     document.body.appendChild(gate);
 
     const guestBtn = gate.querySelector("#welcomeGuest");
+    const adminLoginBtn = gate.querySelector("#welcomeAdminLogin");
     const errorBox = gate.querySelector("#welcomeError");
     const showError = (text) => { errorBox.textContent = text || ""; errorBox.hidden = !text; };
     let captchaToken = null;
     let widget = null;
+
+    if (adminLoginBtn) {
+      adminLoginBtn.addEventListener("click", () => this.openAdminLoginDialog());
+    }
 
     captchaManager.mountWidget(gate.querySelector("#welcomeCaptcha"), {
       onToken: (t) => { captchaToken = t; },
@@ -194,6 +205,132 @@ class AuthManager {
       }
     });
     gate.querySelector("#welcomeLogin").focus();
+  }
+
+  // ------------------------------------------------------------------ dedicated admin login
+  openAdminLoginDialog() {
+    modal.open({
+      title: "Administrator Portal",
+      bodyHtml: `
+        <div class="adm-login-portal">
+          <p style="margin-top:0;margin-bottom:14px;color:var(--color-text-muted,#6b7280);font-size:0.88rem;">
+            Access restricted to authorized platform administrators.
+          </p>
+
+          <!-- Step 1: Username -->
+          <div id="admStep1">
+            <div class="form-group" style="margin-bottom:12px;">
+              <label class="form-label" for="admUsername">Username</label>
+              <input class="form-input" id="admUsername" type="text" autocomplete="username" maxlength="100" placeholder="Enter administrator username">
+            </div>
+            <div class="auth-message error" id="admError1" role="alert" style="margin-top:8px;" hidden></div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+              <button type="button" class="btn btn-secondary btn-sm btn-close-modal">Cancel</button>
+              <button type="button" class="btn btn-primary btn-sm" id="btnAdmNext">Next &rarr;</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Password & CAPTCHA (secure verification) -->
+          <div id="admStep2" hidden>
+            <div class="form-group" style="margin-bottom:12px;">
+              <label class="form-label" for="admPassword">Password</label>
+              <input class="form-input" id="admPassword" type="password" autocomplete="current-password" maxlength="128" placeholder="Enter administrator password">
+            </div>
+            <div style="margin:12px 0;" id="admCaptchaContainer"></div>
+            <div class="auth-message error" id="admError2" role="alert" style="margin-top:8px;" hidden></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnAdmBack">&larr; Back</button>
+              <button type="button" class="btn btn-primary btn-sm" id="btnAdmSubmit">Authenticate</button>
+            </div>
+          </div>
+        </div>`,
+      footerHtml: ``
+    });
+
+    const step1 = document.getElementById("admStep1");
+    const step2 = document.getElementById("admStep2");
+    const uInput = document.getElementById("admUsername");
+    const pInput = document.getElementById("admPassword");
+    const err1 = document.getElementById("admError1");
+    const err2 = document.getElementById("admError2");
+    const nextBtn = document.getElementById("btnAdmNext");
+    const backBtn = document.getElementById("btnAdmBack");
+    const submitBtn = document.getElementById("btnAdmSubmit");
+    const captchaContainer = document.getElementById("admCaptchaContainer");
+
+    if (uInput) uInput.focus();
+
+    let captchaToken = null;
+    let widget = null;
+
+    const showErr1 = (m) => { err1.textContent = m || ""; err1.hidden = !m; };
+    const showErr2 = (m) => { err2.textContent = m || ""; err2.hidden = !m; };
+
+    const goToStep2 = () => {
+      const uname = (uInput.value || "").trim();
+      if (!uname) {
+        showErr1("Please enter your administrator username.");
+        return;
+      }
+      showErr1("");
+      step1.hidden = true;
+      step2.hidden = false;
+      if (pInput) pInput.focus();
+
+      if (!widget && captchaContainer) {
+        captchaManager.mountWidget(captchaContainer, {
+          onToken: (t) => { captchaToken = t; },
+          onExpire: () => { captchaToken = null; },
+          onError: () => showErr2("Security check failed to initialize.")
+        }).then((w) => { widget = w; }).catch((err) => showErr2(err.message));
+      }
+    };
+
+    if (nextBtn) nextBtn.addEventListener("click", goToStep2);
+    if (uInput) uInput.addEventListener("keydown", (e) => { if (e.key === "Enter") goToStep2(); });
+
+    if (backBtn) {
+      backBtn.addEventListener("click", () => {
+        showErr2("");
+        step2.hidden = true;
+        step1.hidden = false;
+        if (uInput) uInput.focus();
+      });
+    }
+
+    const doSubmit = async () => {
+      const uname = (uInput.value || "").trim();
+      const pwd = pInput.value || "";
+      if (!pwd) {
+        showErr2("Please enter your password.");
+        return;
+      }
+      if (widget && widget.enabled && !captchaToken) {
+        showErr2("Please complete the security check.");
+        return;
+      }
+      showErr2("");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Verifying…";
+
+      try {
+        await api.adminLogin(uname, pwd, captchaToken);
+        modal.close();
+        toast.success("Administrator authenticated. Entering dashboard…");
+        setTimeout(() => { window.location.href = "/admin/"; }, 400);
+      } catch (err) {
+        showErr2(err.message || "Invalid administrator credentials.");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Authenticate";
+        if (widget) {
+          captchaToken = null;
+          widget.reset();
+        }
+      }
+    };
+
+    if (submitBtn) submitBtn.addEventListener("click", doSubmit);
+    if (pInput) pInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSubmit(); });
   }
 
   // ------------------------------------------------------------------ logout / delete account
@@ -263,12 +400,16 @@ class AuthManager {
         actions.prepend(box);
       }
       if (this.user) {
+        const adminItemHtml = this.user.is_admin === true
+          ? `<a href="/admin/" class="auth-menu-item" role="menuitem" id="btnAdminDashboard" style="font-weight:600;color:var(--color-primary,#2563eb);display:flex;align-items:center;gap:6px;"><span>🛡️</span> Admin Dashboard</a>`
+          : ``;
         box.innerHTML = `
           <div class="auth-menu">
             <button type="button" class="btn btn-secondary btn-sm auth-menu-btn" id="authMenuBtn" aria-haspopup="true" aria-expanded="false" title="Logged in as ${escapeHtml(this.user.username)}">
               <span class="auth-user">👤 ${escapeHtml(this.user.username)}</span><span class="auth-user-short" aria-hidden="true">👤</span> ▾
             </button>
             <div class="auth-menu-list" id="authMenuList" role="menu" hidden>
+              ${adminItemHtml}
               <button type="button" class="auth-menu-item" role="menuitem" id="btnLogout">Log out</button>
               <button type="button" class="auth-menu-item danger" role="menuitem" id="btnDeleteAccount">Delete account</button>
             </div>
@@ -296,7 +437,7 @@ class AuthManager {
 
     const drawer = document.getElementById("mobileDrawer");
     if (drawer) {
-      ["drawerAuth", "drawerDelete"].forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
+      ["drawerAdmin", "drawerAuth", "drawerDelete"].forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
       const add = (id, text, href, onclick) => {
         const a = document.createElement("a");
         a.id = id;
@@ -307,6 +448,9 @@ class AuthManager {
         drawer.appendChild(a);
       };
       if (this.user) {
+        if (this.user.is_admin === true) {
+          add("drawerAdmin", "🛡️ Admin Dashboard", "/admin/");
+        }
         add("drawerAuth", `Log out (${this.user.username})`, "#", () => this.logout());
         add("drawerDelete", "Delete account", "#", () => this.openDeleteAccountDialog());
       } else if (this.guest) {

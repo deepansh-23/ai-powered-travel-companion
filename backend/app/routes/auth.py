@@ -19,6 +19,7 @@ from app.security import (
 )
 from app.services import auth_service
 from app.services.captcha_service import captcha_service
+from app.services.site_settings_guard import require_setting
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"], dependencies=[Depends(require_same_origin)])
 
@@ -43,7 +44,12 @@ def _client_ip(request: Request) -> str:
 
 
 def _public(user: User) -> UserPublic:
-    return UserPublic(id=user.id, username=user.username, created_at=user.created_at)
+    return UserPublic(
+        id=user.id,
+        username=user.username,
+        is_admin=bool(getattr(user, "is_admin", False)),
+        created_at=user.created_at,
+    )
 
 
 def _set_cookie(request: Request, response: Response, raw_token: str) -> None:
@@ -94,6 +100,7 @@ async def me(request: Request):
 @router.post("/guest")
 async def start_guest(req: GuestStartRequest, request: Request, response: Response):
     """Start a guest session: planning tools work, nothing is saved to an account."""
+    await require_setting("guest_mode_enabled", "Guest mode is temporarily disabled. Please log in.")
     ip = _client_ip(request)
     if _guest_rate_limited(ip):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many guest sessions from this network. Please try again later.")
@@ -112,6 +119,7 @@ async def start_guest(req: GuestStartRequest, request: Request, response: Respon
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(req: RegisterRequest, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    await require_setting("allow_registration", "New account registration is temporarily disabled.")
     ip = _client_ip(request)
     await _check_captcha(req.captcha_token, ip)
     try:
@@ -149,6 +157,7 @@ async def logout(request: Request, response: Response):
             pass  # accounts DB unavailable: cookies are still cleared below
     response.delete_cookie(settings.AUTH_COOKIE_NAME, path="/")
     response.delete_cookie(settings.GUEST_COOKIE_NAME, path="/")
+    response.delete_cookie("slg_admin_stepup", path="/")
     return {"status": "logged_out"}
 
 

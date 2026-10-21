@@ -80,7 +80,7 @@ class History(Base):
 
 
 class Feedback(Base):
-    """A review. user_id is NULL for reviews imported from the old anonymous system."""
+    """A review or user feedback. user_id is NULL for anonymous feedback."""
 
     __tablename__ = "feedback"
 
@@ -89,6 +89,8 @@ class Feedback(Base):
     rating: Mapped[int] = mapped_column(Integer)
     comment: Mapped[str] = mapped_column(Text)
     service_used: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", index=True)
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
@@ -104,3 +106,15 @@ class SavedSession(Base):
     state: Mapped[dict] = mapped_column(JSONType, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, index=True)
+
+
+class AppSetting(Base):
+    """Application settings persisted in PostgreSQL."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    description: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+

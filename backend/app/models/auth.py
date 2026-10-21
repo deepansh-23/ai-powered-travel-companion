@@ -41,6 +41,7 @@ class GuestStartRequest(BaseModel):
 class UserPublic(BaseModel):
     id: str
     username: str
+    is_admin: bool = False
     created_at: Optional[datetime] = None
 
 

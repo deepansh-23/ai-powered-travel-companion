@@ -24,10 +24,13 @@ from app.routes import (
     captcha,
     feedback,
     auth,
-    sessions
+    sessions,
+    settings as public_settings,
 )
 from app.db import dispose_db, init_db
 from admin.routes import router as admin_router
+from admin.monitoring import ApiMetricsMiddleware
+from app.services.site_settings_guard import MaintenanceModeMiddleware
 
 
 @asynccontextmanager
@@ -51,6 +54,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Maintenance mode (admin setting) — added BEFORE metrics so 503s are still recorded
+app.add_middleware(MaintenanceModeMiddleware)
+# API Metrics Middleware for Admin Monitoring
+app.add_middleware(ApiMetricsMiddleware)
 
 # Register API Routers
 app.include_router(health.router)
@@ -68,6 +75,7 @@ app.include_router(captcha.router)
 app.include_router(feedback.router)
 app.include_router(auth.router)
 app.include_router(sessions.router)
+app.include_router(public_settings.router)
 app.include_router(admin_router)
 
 

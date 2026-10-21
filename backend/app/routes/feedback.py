@@ -10,6 +10,7 @@ from app.db_models import User
 from app.models.feedback import FeedbackCreateRequest, FeedbackItem, FeedbackMultiCreateRequest
 from app.security import require_same_origin, require_user
 from app.services import repository
+from app.services.site_settings_guard import require_setting
 
 router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
 
@@ -24,6 +25,7 @@ async def list_feedback(db: AsyncSession = Depends(get_db)):
              dependencies=[Depends(require_same_origin)])
 async def create_feedback(req: FeedbackCreateRequest, user: User = Depends(require_user),
                           db: AsyncSession = Depends(get_db)):
+    await require_setting("allow_reviews", "New reviews are temporarily disabled.")
     try:
         return await repository.create_feedback(db, user, req.rating, req.comment, req.service_used)
     except ValueError as exc:
@@ -35,6 +37,7 @@ async def create_feedback(req: FeedbackCreateRequest, user: User = Depends(requi
 async def create_feedback_multi(req: FeedbackMultiCreateRequest, user: User = Depends(require_user),
                                 db: AsyncSession = Depends(get_db)):
     """ONE review for several services: saved once per selected service (same rating and comment)."""
+    await require_setting("allow_reviews", "New reviews are temporarily disabled.")
     services: List[str] = []
     for name in req.services:
         clean = (name or "").strip()
