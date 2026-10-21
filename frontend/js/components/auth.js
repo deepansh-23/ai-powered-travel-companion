@@ -24,8 +24,8 @@ export const APP_NAME = "AI Powered Travel Companion";
 export const APP_TAGLINE = "Explore Your City with Intelligence and Ease";
 
 export const GUEST_LIMITS_NOTE =
-  "As a guest you can plan trips, search places, cafés and medical care, and use the Area Guide. " +
-  "Not available as a guest: saving History and sessions, posting reviews and having an account (nothing is stored).";
+  "As a guest you can search places, cafés and medical care, and use the Area Guide. " +
+  "Not available as a guest: the Itinerary Planner, saved History and sessions, and posting reviews (nothing is stored).";
 
 class AuthManager {
   constructor() {
@@ -53,15 +53,46 @@ class AuthManager {
     window.location.href = this.loginUrl(next);
   }
 
+  /** The server said "not logged in": show the right screen, without reloading the page. */
   handleLoginRequired() {
+    const wasGuest = this.guest;
     this.user = null;
     this.guest = false;
     window.__slgLoggedIn = false;
-    toast.error("Please log in or continue as a guest.");
     this.renderNav();
-    if (!location.pathname.endsWith("login.html")) {
-      setTimeout(() => window.location.reload(), 700); // reload shows the welcome screen
+    if (location.pathname.endsWith("login.html")) return;
+    if (document.body.hasAttribute("data-requires-login")) {
+      this.showAccountRequired();
+    } else if (!wasGuest) {
+      this.showWelcomeScreen(); // the session ended: choose Log in or guest again
     }
+    const now = Date.now();
+    if (!this._loginToastAt || now - this._loginToastAt > 4000) {
+      this._loginToastAt = now;
+      toast.info(wasGuest ? "That needs a free account. Please log in." : "Please log in or continue as a guest.");
+    }
+  }
+
+  /** Friendly "this page needs an account" card in place of the page content (History, Itinerary Planner). */
+  showAccountRequired() {
+    const main = document.querySelector("main.main-content") || document.querySelector("main");
+    if (!main) return;
+    const feature = document.body.dataset.feature || "This page";
+    const guestLine = this.guest
+      ? "You are in a guest session. Guests can still search places, cafés and medical care, and use the Area Guide."
+      : "It only takes a minute to create a free account.";
+    main.innerHTML = `
+      <div class="account-required">
+        <div class="account-required-icon" aria-hidden="true">🔒</div>
+        <h1>${escapeHtml(feature)} is for members</h1>
+        <p>Log in or create a free account to use ${escapeHtml(feature)}. ${escapeHtml(guestLine)}</p>
+        <div class="account-required-actions">
+          <a class="btn btn-primary" href="${this.loginUrl()}">Log in</a>
+          <a class="btn btn-secondary" href="${pagePath("login.html")}?tab=register&next=${encodeURIComponent(location.pathname + location.search)}">Create a free account</a>
+          <a class="btn btn-secondary" href="${homePath()}">Back to home</a>
+        </div>
+      </div>`;
+    document.body.classList.add("auth-ready"); // the page content is now this card, so show it
   }
 
   /** Ask the server who is here, draw the navbar, show the welcome screen, protect gated pages. */
@@ -89,10 +120,9 @@ class AuthManager {
       return false;
     }
 
-    // History needs a real account; the planning tools accept guests too
+    // History and the Itinerary Planner need a real account (guests see a friendly card, no redirect loop)
     if (document.body.hasAttribute("data-requires-login") && !this.user) {
-      toast.info("History and saved sessions need a free account. Please log in.");
-      setTimeout(() => this.goToLogin(), 900);
+      this.showAccountRequired();
       return false;
     }
 

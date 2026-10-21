@@ -26,7 +26,10 @@ You don't need to be a techie to use it. 😊
 |---|---|---|
 | 🗺️ | **Trip Planner** | Pick cities and dates, choose transport and a hotel, get a full itinerary and download it as a PDF |
 | 🌍 | **City, state or country** | Type a place and the planner asks a few questions (where you land, which cities to visit) so big trips stay realistic |
+| ✈️ | **Getting between cities** | For long moves, pick a flight, train, cab or other option first (flights with live prices, trains with times), then choose your hotel |
 | 🏨 | **A hotel for each stay** | Long trips use several hotels, each near the places of those days, so you travel less |
+| 🗺️ | **Trip picture & map** | Your route, stays and every place on one map, with each day in its own colour |
+| 🧳 | **Arrival and departure notes** | Short, clear notes for landing, hotel changes and heading home, with cab time estimates |
 | 📱 | **Quick Version** | A short, easy-to-read version of your plan with map links, made for use while travelling |
 | ✈️ | **Flights with nearby dates** | See the cheapest day around your date: 🟢 cheap, 🟠 medium, 🔴 expensive |
 | 🚆 | **Trains** | Pick your classes (SL, 3AC, 2AC, 1AC) and your exact railway stations |
@@ -46,7 +49,7 @@ You don't need to be a techie to use it. 😊
 When you open the app, you choose:
 
 - 🔐 **Log in** (free account): everything works, and your history, saved sessions and reviews are kept.
-- 🚶 **Continue as guest**: you can plan trips and use places, cafés, medical search and the Area Guide. Nothing is saved, and you can't post reviews or keep a history.
+- 🚶 **Continue as guest**: you can use places, cafés, medical search and the Area Guide. Nothing is saved, and you can't use the Itinerary Planner, post reviews or keep a history. Log in any time and the results you just made are saved for you.
 
 Logged-in users can also **delete their account** any time (menu next to your name → *Delete account*). This removes your login, history and saved sessions.
 

@@ -334,13 +334,13 @@ class PDFService:
               # Places
               places = seg.get("places", [])
               if places:
-                p_text = " • ".join(
-                    [p.get("name", "") for p in places if p.get("name")]
-                )
-                if p_text:
-                  day_elements.append(
-                      Paragraph(f"• <b>Sights:</b> {p_text}", body_style)
-                  )
+                for p in places:
+                  if not p.get("name"):
+                    continue
+                  line = f"• <b>{p['name']}</b>"
+                  if p.get("about"):
+                    line += f" - {_esc(p['about'])}"
+                  day_elements.append(Paragraph(line, body_style))
           day_elements.append(Spacer(1, 3))
 
         story.append(KeepTogether(day_elements))

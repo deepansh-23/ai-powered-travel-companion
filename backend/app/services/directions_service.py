@@ -46,8 +46,31 @@ def compass_heading(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
   return _COMPASS[int((bearing + 22.5) // 45) % 8]
 
 
-def suggest_mode(distance_km: float, preference: str) -> Tuple[str, str]:
-  """Returns (label, google travelmode) for the leg, honouring the trip's local transport choice."""
+def suggest_mode_multi(distance_km: float, modes: List[str]) -> Tuple[str, str]:
+  """Best way for one leg when the traveller accepts SEVERAL modes (walking, public, taxi)."""
+  m = set(modes)
+  if m == {"walking"}:
+    return ("Walk", "walking")
+  if "walking" in m and distance_km <= 1.2:
+    return ("Walk", "walking")
+  if "walking" not in m and distance_km <= 0.6:
+    return ("Walk", "walking")          # too short to bother with a vehicle
+  if m == {"taxi"} or m == {"taxi", "walking"}:
+    return ("Taxi / Auto-rickshaw", "driving")
+  if "taxi" in m and "public" in m:
+    if distance_km <= 3.5:
+      return ("Auto-rickshaw / e-rickshaw / taxi", "driving")
+    return ("Local bus / metro", "transit")
+  return ("Local bus / metro", "transit") if distance_km > 1.2 else ("Walk", "walking")
+
+
+def suggest_mode(distance_km: float, preference: Any) -> Tuple[str, str]:
+  """Returns (label, google travelmode) for the leg, honouring the trip's local transport choice.
+
+  `preference` is either the old single value ("public" / "walking" / "driving") or a list of modes.
+  """
+  if isinstance(preference, (list, tuple, set)):
+    return suggest_mode_multi(distance_km, [str(x).lower() for x in preference] or ["public"])
   pref = (preference or "public").lower()
   if pref == "walking":
     return ("Walk", "walking")
@@ -128,10 +151,14 @@ def build_leg(origin: _Point, dest: _Point, preference: str) -> Dict[str, Any]:
       f"&travelmode={travel_mode}"
   )
 
+  walk_minutes = drive_minutes = None
   if distance_km is not None:
+    walk_minutes = estimate_minutes(distance_km, "Walk")
+    drive_minutes = estimate_minutes(distance_km, "Taxi / Auto-rickshaw")
     summary = (
         f"From {origin.name}, head {heading} for about {distance_km} km. "
-        f"Best way: {mode_label} (about {minutes} min)."
+        f"About {walk_minutes} min on foot, or about {drive_minutes} min by car or auto. "
+        f"We suggest: {mode_label}."
     )
   else:
     summary = (
@@ -145,6 +172,8 @@ def build_leg(origin: _Point, dest: _Point, preference: str) -> Dict[str, Any]:
       "heading": heading,
       "mode": mode_label,
       "minutes": minutes,
+      "walk_minutes": walk_minutes,
+      "drive_minutes": drive_minutes,
       "summary": summary,
       "maps_url": maps_url,
       "estimate_note": "Distance and time are estimates; open the map for exact turn-by-turn directions.",
@@ -169,7 +198,7 @@ def enrich_itinerary(
   day then starts from that day's hotel.
   """
   places = verified_places or []
-  preference = getattr(req, "transportation", "public")
+  preference = getattr(req, "transport_modes", None) or getattr(req, "transportation", "public")
 
   hotel = getattr(req, "selected_hotel", None) or getattr(response, "selected_hotel", None)
   hotel_point: Optional[_Point] = None

@@ -2,7 +2,20 @@
 """
 
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+_LOCAL_MODES = ("walking", "public", "taxi")
+
+
+def normalize_transport_modes(values):
+    """['Walking', 'driving'] -> ['walking', 'taxi'] (known modes only, fixed order); None stays None."""
+    if values is None:
+        return None
+    mapped = {"driving": "taxi", "walk": "walking", "transit": "public"}
+    wanted = {mapped.get(str(v).strip().lower(), str(v).strip().lower()) for v in values}
+    clean = [m for m in _LOCAL_MODES if m in wanted]
+    return clean or None
 
 
 class ItineraryRequest(BaseModel):
@@ -25,6 +38,13 @@ class ItineraryRequest(BaseModel):
     food_preferences: List[str] = Field(default_factory=list)
     pace: str = "moderate"
     transportation: str = "public"
+    transport_modes: Optional[List[str]] = Field(
+        None, description="Local transport the traveller accepts: any of walking, public, taxi")
+
+    @field_validator("transport_modes", mode="before")
+    @classmethod
+    def _clean_modes(cls, v):
+        return normalize_transport_modes(v)
     additional_preferences: Optional[str] = None
     # Multi-area trips (country / state / city + nearby places)
     areas: List[str] = Field(default_factory=list, description="Places to stay in, in visiting order")
@@ -40,6 +60,8 @@ class ItineraryPlaceItem(BaseModel):
     address: Optional[str] = None
     duration: Optional[str] = None
     admission: Optional[str] = None
+    about: Optional[str] = Field(None, description="1-2 friendly sentences: what the place is and why people visit")
+    what_to_do: Optional[str] = Field(None, description="What to do or see there")
     verified: bool = True
     website: Optional[str] = None
     latitude: Optional[float] = None
@@ -77,6 +99,7 @@ class ItineraryDay(BaseModel):
     food_stop_dinner: FoodStop
     evening: ItinerarySegment
     area: Optional[str] = Field(None, description="Where this day is spent (multi-area trips)")
+    notes: List[Dict[str, Any]] = Field(default_factory=list, description="Arrival, departure and hotel-change cards")
 
 
 class ItineraryResponse(BaseModel):
@@ -122,12 +145,22 @@ class ScopeResponse(BaseModel):
     neighbours: List[Dict[str, str]] = Field(default_factory=list)
     neighbours_title: str = ""
     needs_arrival: bool = False
-    source: Literal["ai", "basic"] = "basic"
+    default_arrival: Optional[str] = Field(None, description="Suggested landing city (capital or main-airport city)")
+    default_arrival_note: str = ""
+    arrival_options: List[Dict[str, str]] = Field(default_factory=list, description="Cities the traveller can start from")
+    source: Literal["ai", "static", "basic"] = "basic"
 
 
 class StayHotelChoice(BaseModel):
     block_index: int = Field(..., ge=0)
     hotel: Optional[Dict[str, Any]] = None
+
+
+class TransferChoice(BaseModel):
+    """How the traveller moves between two stays (mode: flight, train, cab or other)."""
+    to_stay: int = Field(..., ge=0)
+    mode: Literal["flight", "train", "cab", "other"]
+    option: Optional[Dict[str, Any]] = None
 
 
 class FinalizeRequest(BaseModel):
@@ -137,4 +170,11 @@ class FinalizeRequest(BaseModel):
     rooms: Optional[int] = Field(None, ge=1, le=10)
     budget_per_person_per_day: float = Field(3000, ge=1000, le=100000)
     transportation: str = "public"
+    transport_modes: Optional[List[str]] = None
+    transfer_choices: List[TransferChoice] = Field(default_factory=list)
+
+    @field_validator("transport_modes", mode="before")
+    @classmethod
+    def _clean_modes(cls, v):
+        return normalize_transport_modes(v)
 

@@ -8,7 +8,7 @@ import { toast } from "../components/toast.js";
 import { escapeHtml } from "../utils/formatters.js";
 import { renderSessionsList } from "../components/saved-sessions.js";
 
-document.addEventListener("DOMContentLoaded", () => {
+function startHistoryPage() {
   const container = document.getElementById("historyList");
   const filterButtons = document.querySelectorAll(".history-filter-btn");
 
@@ -76,4 +76,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   loadHistory();
+}
+
+// Only a logged-in user gets here: guests are shown the "needs an account" card by the auth manager,
+// so nothing below runs (and no API call is made) for them.
+document.addEventListener("DOMContentLoaded", () => {
+  if (document.body.classList.contains("auth-ready")) startHistoryPage();
+  else window.addEventListener("slg:auth-ready", startHistoryPage, { once: true });
 });

@@ -23,18 +23,35 @@ import {
   scopeCountText,
   buildStayBlockHtml,
   buildTransfersHtml,
-  buildStaysSummaryHtml
+  buildStaysSummaryHtml,
+  buildStayDoneHtml,
+  buildStayUpcomingHtml,
+  buildTransferChooserHtml,
+  buildTransferPanelHtml,
+  buildTransferSummaryLine,
+  scoreHotels,
+  buildMatchChipsHtml,
+  buildHotelConnectorHtml,
+  buildDayNotesHtml,
+  buildFlightSiteLinksHtml,
+  placeAboutHtml,
+  recommendedAreas,
+  scopeAdviceText,
+  buildTripGlanceHtml,
+  dayHighlights,
+  dayColor
 } from "./itinerary-extras.js";
+import { renderTripMap } from "../components/trip-map.js";
 import { attachPlaceAutocomplete } from "../components/place-autocomplete.js";
 
 const DEFAULT_CUISINES = [
-  "Local Street Food", "Indian", "North Indian / Mughlai", "South Indian",
+  "Local specialities", "Local Street Food", "Indian", "North Indian / Mughlai", "South Indian",
   "Punjabi", "Rajasthani", "Bengali", "Gujarati", "Italian", "Chinese",
   "Continental / European", "Mediterranean", "Thai", "Japanese / Sushi"
 ];
 
 const DEFAULT_BAKERIES = [
-  "Specialty Coffee & Pour Over", "Artisan Sourdough & Breads",
+  "Local specialities", "Specialty Coffee & Pour Over", "Artisan Sourdough & Breads",
   "French Pastries & Croissants", "Cakes & Cupcakes", "Tea & Herbal Infusions",
   "Vegan Bakery", "Cheesecakes", "Traditional Regional Sweets"
 ];
@@ -73,6 +90,12 @@ class ItineraryPlannerController {
     this.skeleton = null;
     this.stayHotels = {};
     this.stayChoices = {};
+    this.stayOpen = null; // the stay whose hotel list is open (null = the first stay still undecided)
+    this.transferChoices = {}; // to_stay -> {mode, option}: how the traveller moves between two stays
+    this.transferData = {};    // to_stay -> {data, loading, error}: flights and trains found for that move
+    this.transferTab = {};     // to_stay -> which tab is showing
+    this._transferPromises = {};
+    this.anchors = {};         // stay -> {lat, lon, label}: the airport or station the traveller arrives at
 
     // Optional train details (classes + exact stations)
     this.trainClasses = [];
@@ -93,6 +116,7 @@ class ItineraryPlannerController {
     this.initDates();
     this.initBudgetSync();
     this.initChipSelection();
+    this.initTransportModes();
     this.initTagPickers();
     this.attachEventListeners();
     this.initTrainDetails();
@@ -228,6 +252,10 @@ class ItineraryPlannerController {
     this.skeleton = null;
     this.stayHotels = {};
     this.stayChoices = {};
+    this.transferChoices = {};
+    this.transferData = {};
+    this._transferPromises = {};
+    this.anchors = {};
     this.scopeInfo = null;
     this.scopeFor = "";
     this.scopeState = { mode: "", selected: [], neighbourSelected: [], arrival: "" };
@@ -687,23 +715,34 @@ class ItineraryPlannerController {
     }
   }
 
+  /** "Book Flight": opens straight away with flight-website links. The provider's own booking options are looked up quietly
+   *  in the background and only appear if they work. A failed lookup never shows an error. */
   async showFlightBookingOptions(opt) {
     const raw = opt.raw_provider_data || {};
+    const sites = buildFlightSiteLinksHtml(raw.search_params, "Book on a flight website");
+    const googleLink = opt.booking_url
+      ? `<p><a class="btn btn-primary btn-sm" href="${escapeHtml(opt.booking_url)}" target="_blank" rel="noopener noreferrer">View this flight on Google Flights ↗</a></p>`
+      : "";
+    const generic = (!sites && !googleLink)
+      ? `<p><a class="btn btn-primary btn-sm" href="https://www.google.com/travel/flights" target="_blank" rel="noopener noreferrer">Open Google Flights ↗</a></p>`
+      : "";
     modal.open({
       title: `Book ${opt.operator} ${opt.number || ""}`.trim(),
-      bodyHtml: `<p>Fetching provider booking options…</p>`,
+      bodyHtml: `
+        <p style="font-size:0.9rem;color:var(--color-text-muted);">Choose where to book. You will leave AI Powered Travel Companion. No payment is taken here, and prices on the sites can differ.</p>
+        <div id="providerBookingSlot"></div>
+        ${googleLink}${sites}${generic}`,
       footerHtml: `<button class="btn btn-secondary btn-sm btn-close-modal">Close</button>`
     });
-    const body = document.getElementById("modalBody");
+
+    if (!raw.booking_token || !raw.search_params) return;
     try {
-      const res = await api.getFlightBookingOptions(raw.booking_token, raw.search_params || {});
+      const res = await api.getFlightBookingOptions(raw.booking_token, raw.search_params);
       const options = (res && res.options) || [];
-      if (!options.length) {
-        body.innerHTML = `<p>The provider returned no booking links for this flight.${opt.booking_url ? ` <a href="${escapeHtml(opt.booking_url)}" target="_blank" rel="noopener noreferrer">View on Google Flights ↗</a>` : ""}</p>`;
-        return;
-      }
-      body.innerHTML = `
-        <p style="font-size:0.85rem;color:var(--color-text-muted);">You will leave AI Powered Travel Companion to book on the provider's site. No payment is taken here. Prices can change.</p>
+      const slot = document.getElementById("providerBookingSlot");
+      if (!options.length || !slot) return;
+      slot.innerHTML = `
+        <div class="flight-sites-title" style="margin-top:6px;">Book directly</div>
         ${options.map((o, i) => `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border);">
             <div><strong>${escapeHtml(o.book_with || "Provider")}</strong>${o.option_title ? `<div style="font-size:0.8rem;color:var(--color-text-muted);">${escapeHtml(o.option_title)}</div>` : ""}</div>
@@ -712,11 +751,11 @@ class ItineraryPlannerController {
               <button type="button" class="btn btn-primary btn-sm btn-open-booking" data-idx="${i}">Book ↗</button>
             </div>
           </div>`).join("")}`;
-      body.querySelectorAll(".btn-open-booking").forEach(btn => {
+      slot.querySelectorAll(".btn-open-booking").forEach(btn => {
         btn.addEventListener("click", () => this.openBookingOption(options[Number(btn.dataset.idx)]));
       });
-    } catch (err) {
-      body.innerHTML = `<p>Could not load booking options: ${escapeHtml(err.message)}</p>`;
+    } catch (_) {
+      // Silent on purpose: the website links above already let the traveller book
     }
   }
 
@@ -783,6 +822,22 @@ class ItineraryPlannerController {
   initScope() {
     const dest = document.getElementById("itineraryDest");
     if (dest) dest.addEventListener("change", () => this.loadScope());
+    // A different trip length changes how many places to stay in make sense
+    ["itineraryDepDate", "itineraryRetDate"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.addEventListener("change", () => this.syncScopeDays()); el.addEventListener("input", () => this.syncScopeDays()); }
+    });
+  }
+
+  /** Re-works the advice, the recommended number of places and the "fits your N days" marks for the current dates. */
+  syncScopeDays() {
+    if (!this.scopeInfo) return;
+    const days = this.tripDays();
+    if (days === this.scopeInfo.days) return;
+    this.scopeInfo.days = days;
+    this.scopeInfo.recommended_areas = recommendedAreas(this.scopeInfo.kind, days);
+    this.scopeInfo.advice = scopeAdviceText(this.scopeInfo.kind, this.scopeInfo.name, days);
+    this.renderScopePanel();
   }
 
   tripDays() {
@@ -820,7 +875,7 @@ class ItineraryPlannerController {
     return list.filter(a => a && !seen.has(a.toLowerCase()) && seen.add(a.toLowerCase()));
   }
 
-  async loadScope() {
+  async loadScope(force = false) {
     const panel = document.getElementById("scopePanel");
     const dest = (document.getElementById("itineraryDest")?.value || "").trim();
     if (!panel) return;
@@ -830,15 +885,20 @@ class ItineraryPlannerController {
       this.renderScopePanel();
       return;
     }
-    if (dest === this.scopeFor && this.scopeInfo) return;
+    if (!force && dest === this.scopeFor && this.scopeInfo) return;
+    const keep = force && this.scopeInfo ? { mode: this.scopeState.mode, arrival: this.scopeState.arrival } : null;
     panel.hidden = false;
     panel.innerHTML = `<div class="scope-card"><div class="scope-advice">Checking how big “${escapeHtml(dest)}” is…</div></div>`;
     try {
       const info = await api.getItineraryScope({ destination: dest, duration_days: this.tripDays() });
       if ((document.getElementById("itineraryDest")?.value || "").trim() !== dest) return; // user typed something else meanwhile
+      info.days = this.tripDays();
+      info.ai_days = info.days; // the trip length these suggestions were made for
       this.scopeInfo = info;
       this.scopeFor = dest;
-      this.scopeState = { mode: (info.modes[0] || {}).value || "", selected: [], neighbourSelected: [], arrival: "" };
+      // for a state or a country the start city is filled in with the suggested one (capital or main-airport city)
+      this.scopeState = { mode: (info.modes[0] || {}).value || "", selected: [], neighbourSelected: [], arrival: info.default_arrival || "" };
+      if (keep) { this.scopeState.mode = keep.mode || this.scopeState.mode; this.scopeState.arrival = keep.arrival || this.scopeState.arrival; }
       this.renderScopePanel();
     } catch (_) {
       // The questions are a help, not a requirement: plan the place as typed
@@ -853,7 +913,11 @@ class ItineraryPlannerController {
     if (!panel) return;
     if (!this.scopeInfo) { panel.hidden = true; panel.innerHTML = ""; return; }
     panel.hidden = false;
-    panel.innerHTML = buildScopePanelHtml(this.scopeInfo, this.scopeState);
+    const days = this.tripDays();
+    const stale = this.scopeInfo.source === "ai" && this.scopeInfo.ai_days && Math.abs(days - this.scopeInfo.ai_days) >= 3;
+    panel.innerHTML = buildScopePanelHtml(this.scopeInfo, this.scopeState, { days, refreshDays: stale ? days : null });
+    const refreshBtn = panel.querySelector("#scopeRefresh");
+    if (refreshBtn) refreshBtn.addEventListener("click", () => this.loadScope(true));
     const refreshCount = () => {
       const el = panel.querySelector("#scopeCount");
       if (el) el.textContent = scopeCountText(this.scopeInfo, this.areasList().length);
@@ -877,6 +941,9 @@ class ItineraryPlannerController {
         refreshCount();
       });
     });
+    panel.querySelectorAll(".scope-arrival-chip").forEach(chip => {
+      chip.addEventListener("click", () => { this.scopeState.arrival = chip.dataset.city; this.renderScopePanel(); });
+    });
     const arrival = panel.querySelector("#scopeArrival");
     if (arrival) {
       attachPlaceAutocomplete(arrival);
@@ -890,6 +957,7 @@ class ItineraryPlannerController {
   /** Makes sure the "Plan your area" questions were answered before searching. Returns false to stop. */
   async ensureScope() {
     if (!(this.scopeInfo && this.scopeFor === this.destination)) await this.loadScope();
+    this.syncScopeDays();
     if (!this.isBigPlace()) return true;
     const input = document.getElementById("scopeArrival");
     if (input) this.scopeState.arrival = input.value.trim();
@@ -912,6 +980,14 @@ class ItineraryPlannerController {
   startHotelStep() {
     this.stayHotels = {};
     this.stayChoices = {};
+    this.stayOpen = null;
+    this.transferChoices = {};
+    this.transferData = {};
+    this.transferTab = {};
+    this._transferPromises = {};
+    this.anchors = {};
+    const first = this.selectedOutbound;
+    if (first && String(first.mode).toLowerCase() === "flight") this.loadAnchor(0, first.destination);
     this.renderStayBlocks();
     this.setStep(3);
   }
@@ -928,7 +1004,22 @@ class ItineraryPlannerController {
     }
 
     container.innerHTML = "";
+    const needing = (sk.stay_blocks || []).filter(b => b.needs_hotel);
+    // One stay is open at a time: the one being changed, otherwise the first stay without a decision
+    const firstUndecided = needing.find(b => this.stayChoices[b.index] === undefined);
+    const openIdx = (this.stayOpen !== null && this.stayOpen !== undefined)
+      ? this.stayOpen
+      : (firstUndecided ? firstUndecided.index : null);
+
+    let previousHotel = null; // the hotel of the stay before, so a change of hotel is shown clearly
     (sk.stay_blocks || []).forEach(b => {
+      const chosenHere = this.stayChoices[b.index];
+      if (b.needs_hotel && chosenHere && previousHotel && chosenHere.name !== previousHotel.name) {
+        const hop = document.createElement("div");
+        hop.innerHTML = buildHotelConnectorHtml(previousHotel, chosenHere);
+        container.appendChild(hop.firstElementChild);
+      }
+      if (b.needs_hotel && chosenHere) previousHotel = chosenHere;
       if (!b.needs_hotel) {
         const note = document.createElement("div");
         note.className = "stay-block stay-none";
@@ -936,17 +1027,138 @@ class ItineraryPlannerController {
         container.appendChild(note);
         return;
       }
+      const decided = this.stayChoices[b.index] !== undefined;
+      const inbound = this.inboundTransfer(b.index);
+      const travel = this.transferChoices[b.index];
+      const inboundLine = travel ? buildTransferSummaryLine(travel) : "";
       const wrap = document.createElement("div");
-      wrap.innerHTML = buildStayBlockHtml(b, this.stayChoices[b.index]);
+      if (b.index !== openIdx) {
+        wrap.innerHTML = decided ? buildStayDoneHtml(b, this.stayChoices[b.index], inboundLine) : buildStayUpcomingHtml(b);
+        const card = wrap.firstElementChild;
+        container.appendChild(card);
+        card.querySelector(".stay-change").addEventListener("click", () => {
+          this.stayOpen = b.index;
+          this.renderStayBlocks();
+          this.focusStay(b.index);
+        });
+        return;
+      }
+      if (inbound && !travel) {
+        // a long move: first choose how to get there, then the hotel
+        wrap.innerHTML = buildTransferChooserHtml(b, inbound, this.transferTab[b.index] || this.defaultTransferTab(inbound));
+        container.appendChild(wrap.firstElementChild);
+        this.wireTravelChooser(container.lastElementChild, b, inbound);
+        return;
+      }
+      wrap.innerHTML = buildStayBlockHtml(b, this.stayChoices[b.index], inboundLine);
       const el = wrap.firstElementChild;
       container.appendChild(el);
+      const changeTravel = el.querySelector(".stay-change-travel");
+      if (changeTravel) changeTravel.addEventListener("click", () => {
+        delete this.transferChoices[b.index];
+        delete this.anchors[b.index];
+        this.stayOpen = b.index;
+        this.renderStayBlocks();
+      });
       el.querySelector(".stay-find").addEventListener("click", () => this.searchStayHotels(b.index));
       el.querySelector(".stay-skip").addEventListener("click", () => this.skipStayHotel(b.index));
       el.querySelector(".stay-sort").addEventListener("change", () => {
         if (this.stayHotels[b.index]) this.searchStayHotels(b.index);
       });
       if (this.stayHotels[b.index] && this.stayHotels[b.index].hotels) this.renderStayHotels(b.index);
+      else if (!this.stayHotels[b.index]) this.searchStayHotels(b.index); // open stays load their hotels by themselves
     });
+  }
+
+  // --- Travelling between two stays (long moves) ---
+
+  inboundTransfer(blockIndex) {
+    return ((this.skeleton && this.skeleton.transfers) || []).find(t => t.to_stay === blockIndex && t.needs_choice) || null;
+  }
+
+  defaultTransferTab(transfer) {
+    return transfer.distance_km >= 350 ? "flight" : "train";
+  }
+
+  /** One search per journey, shared by every re-draw of the chooser (so it never gets stuck on "searching"). */
+  loadTransferOptions(idx, transfer) {
+    if (this._transferPromises[idx]) return this._transferPromises[idx];
+    this.transferData[idx] = { data: null, loading: true, error: false };
+    this._transferPromises[idx] = (async () => {
+      if (!transfer.date) { this.transferData[idx] = { data: null, loading: false, error: false }; return; }
+      try {
+        const data = await api.searchTransportLeg({
+          origin: transfer.from_area,
+          destination: transfer.to_area,
+          date: transfer.date,
+          travelers: this.travelers,
+          preference: "best-overall",
+          currency: "INR",
+          train_classes: this.trainClasses
+        });
+        this.transferData[idx] = { data, loading: false, error: false };
+      } catch (_) {
+        this.transferData[idx] = { data: null, loading: false, error: true };
+      }
+    })();
+    return this._transferPromises[idx];
+  }
+
+  wireTravelChooser(el, block, transfer) {
+    const idx = block.index;
+    const panel = el.querySelector("[data-panel]");
+    const paint = () => {
+      if (!document.contains(el)) return; // the page moved on
+      const tab = this.transferTab[idx] || this.defaultTransferTab(transfer);
+      el.querySelectorAll(".transfer-tab").forEach(b => {
+        b.classList.toggle("active", b.dataset.tab === tab);
+        b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+      });
+      const st = this.transferData[idx] || {};
+      panel.innerHTML = buildTransferPanelHtml(tab, st.data || null, transfer, st);
+      panel.querySelectorAll(".transfer-select").forEach(btn => btn.addEventListener("click", () => this.chooseTransfer(idx, btn, st.data)));
+      panel.querySelectorAll(".transfer-book").forEach(btn => btn.addEventListener("click", () => {
+        const opt = ((st.data && st.data.flights) || []).find(o => o.id === btn.dataset.id);
+        if (opt) this.showFlightBookingOptions(opt);
+      }));
+    };
+    el.querySelectorAll(".transfer-tab").forEach(b => b.addEventListener("click", () => { this.transferTab[idx] = b.dataset.tab; paint(); }));
+    this.loadTransferOptions(idx, transfer).then(paint);
+    paint();
+  }
+
+  chooseTransfer(idx, btn, data) {
+    const kind = btn.dataset.kind;
+    let choice = { mode: kind };
+    if (kind === "flight" || kind === "train") {
+      const list = (data && (kind === "flight" ? data.flights : data.trains)) || [];
+      const option = list.find(o => o.id === btn.dataset.id);
+      if (!option) return;
+      choice = { mode: kind, option };
+      if (kind === "flight") this.loadAnchor(idx, option.destination);
+    }
+    this.transferChoices[idx] = choice;
+    this.persistSessionState();
+    this.renderStayBlocks();
+    this.focusStay(idx);
+  }
+
+  /** Looks up where the airport is, so hotels can be ranked by closeness to it. Quietly does nothing if unknown. */
+  async loadAnchor(idx, terminalName) {
+    const name = String(terminalName || "").replace(/^.*\((.*)\)$/, "$1").trim();
+    if (!name) return;
+    try {
+      const res = await api.getTerminalLocation(name);
+      if (res && res.found) {
+        this.anchors[idx] = { lat: res.latitude, lon: res.longitude, label: name };
+        if (this.stayHotels[idx] && this.stayHotels[idx].hotels) this.renderStayHotels(idx); // re-rank with the new information
+      }
+    } catch (_) { /* ranking works without it */ }
+  }
+
+  focusStay(index) {
+    const el = this.stayEl(index);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   stayEl(index) {
@@ -959,6 +1171,7 @@ class ItineraryPlannerController {
     if (!block || !el) return;
     const slot = el.querySelector(".stay-hotels");
     const sort = el.querySelector(".stay-sort").value;
+    if (!this.stayHotels[index]) this.stayHotels[index] = { hotels: null, loading: true };
     slot.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>Searching hotels near ${escapeHtml(block.search_query)}…</p></div>`;
     try {
       const res = await api.searchHotels({
@@ -966,13 +1179,14 @@ class ItineraryPlannerController {
         check_in_date: block.check_in || this.outboundDate,
         check_out_date: block.check_out || this.returnDate || this.outboundDate,
         travelers: this.travelers,
-        sort_by: sort,
+        sort_by: sort === "best_match" ? "relevance" : sort,
         currency: "INR"
       });
       this.stayHotels[index] = { hotels: res.hotels || [], notice: res.notice || "" };
       this.renderStayHotels(index);
     } catch (err) {
-      slot.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p class="error-text">Could not load hotels: ${escapeHtml(err.message)}</p></div>`;
+      delete this.stayHotels[index]; // allow another try
+      slot.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p class="error-text">Could not load hotels: ${escapeHtml(err.message)}</p><p>Press “Find hotels near here” to try again.</p></div>`;
     }
   }
 
@@ -988,10 +1202,15 @@ class ItineraryPlannerController {
       return;
     }
     const chosen = this.stayChoices[index];
-    data.hotels.forEach(h => slot.appendChild(this.buildHotelCard(h, !!(chosen && chosen.id === h.id), index, block)));
+    const sortValue = el.querySelector(".stay-sort").value;
+    const centroid = block && block.centroid ? { lat: block.centroid.lat, lon: block.centroid.lon } : null;
+    const ranked = scoreHotels(data.hotels, { centroid, anchor: this.anchors[index] || null });
+    const infoById = new Map(ranked.map(r => [r.hotel.id, r]));
+    const ordered = sortValue === "best_match" ? ranked.map(r => r.hotel) : data.hotels;
+    ordered.forEach(h => slot.appendChild(this.buildHotelCard(h, !!(chosen && chosen.id === h.id), index, block, infoById.get(h.id))));
   }
 
-  buildHotelCard(h, isSelected, index, block) {
+  buildHotelCard(h, isSelected, index, block, info = null) {
     const card = document.createElement("article");
     card.className = "hotel-card" + (isSelected ? " selected" : "");
     card.id = `hotel-${index}-${h.id}`;
@@ -1012,6 +1231,7 @@ class ItineraryPlannerController {
         <div style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:6px;">${h.star_class ? `${h.star_class}-Star • ` : ""}${escapeHtml(ratingText)}</div>
         <p style="font-size:0.825rem;color:var(--color-text-secondary);margin-bottom:8px;">${escapeHtml(h.address)}</p>
         ${h.free_cancellation ? `<span class="badge badge-primary" style="font-size:0.75rem;">✓ Free Cancellation</span>` : ""}
+        ${buildMatchChipsHtml(info)}
       </div>
       ${h.recommendation_reason ? `<div class="transport-reason-note" style="margin:4px 0;">${escapeHtml(h.recommendation_reason)}</div>` : ""}
       <div style="border-top:1px solid var(--color-border);padding-top:10px;margin-top:auto;">
@@ -1030,16 +1250,24 @@ class ItineraryPlannerController {
     return card;
   }
 
+  /** Where to go after a decision: the next undecided stay opens, the finished one shrinks to its card. */
+  afterStayDecision() {
+    this.stayOpen = null;
+    this.renderStayBlocks();
+    const next = (this.skeleton.stay_blocks || []).find(b => b.needs_hotel && this.stayChoices[b.index] === undefined);
+    if (next) this.focusStay(next.index);
+  }
+
   chooseStayHotel(index, hotel) {
     this.stayChoices[index] = hotel;
-    this.renderStayBlocks();
+    this.afterStayDecision();
     this.persistSessionState();
     toast.success(`Stay ${index + 1}: ${hotel.name}`);
   }
 
   skipStayHotel(index) {
     this.stayChoices[index] = null;
-    this.renderStayBlocks();
+    this.afterStayDecision();
     this.persistSessionState();
   }
 
@@ -1049,6 +1277,10 @@ class ItineraryPlannerController {
     const resultsContainer = document.getElementById("itineraryResults");
     if (!sk || !resultsContainer) return;
     const needing = (sk.stay_blocks || []).filter(b => b.needs_hotel);
+    const unchosenTravel = (sk.transfers || []).filter(t => t.needs_choice && !this.transferChoices[t.to_stay]);
+    if (unchosenTravel.length) {
+      toast.info(`No travel chosen for ${unchosenTravel.map(t => `${t.from_area} → ${t.to_area}`).join(", ")}. A cab estimate will be used.`);
+    }
     const missing = needing.filter(b => this.stayChoices[b.index] === undefined);
     if (missing.length) {
       toast.info(`No hotel chosen for ${missing.map(b => `Stay ${b.index + 1}`).join(", ")}. It will be left out of the budget.`);
@@ -1063,7 +1295,9 @@ class ItineraryPlannerController {
         travelers_count: this.travelers,
         rooms: this.rooms,
         budget_per_person_per_day: this.prefs.budgetPerDay || 3000,
-        transportation: this.prefs.localTransport || "public"
+        transportation: this.prefs.localTransport || "public",
+        transport_modes: this.prefs.localModes || null,
+        transfer_choices: Object.entries(this.transferChoices).map(([to, c]) => ({ to_stay: Number(to), mode: c.mode, option: c.option || null }))
       });
       Object.assign(data, {
         source: this.source,
@@ -1197,6 +1431,44 @@ class ItineraryPlannerController {
     });
   }
 
+  /** Local transport: any combination of walking / public transit / taxi (at least one stays on). */
+  initTransportModes() {
+    const grid = document.getElementById("localTransportModes");
+    if (!grid) return;
+    grid.querySelectorAll(".mode-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const active = grid.querySelectorAll(".mode-chip.active");
+        if (chip.classList.contains("active") && active.length === 1) {
+          toast.info("Keep at least one way of getting around selected.");
+          return;
+        }
+        chip.classList.toggle("active");
+        chip.setAttribute("aria-pressed", String(chip.classList.contains("active")));
+      });
+    });
+  }
+
+  selectedTransportModes() {
+    const modes = Array.from(document.querySelectorAll("#localTransportModes .mode-chip.active")).map(c => c.dataset.value);
+    return modes.length ? modes : ["walking", "public"];
+  }
+
+  /** The single value older screens and saved trips understand. */
+  primaryTransport(modes) {
+    if (modes.includes("public")) return "public";
+    if (modes.includes("taxi")) return "driving";
+    return "walking";
+  }
+
+  setTransportModes(modes) {
+    const want = new Set(modes);
+    document.querySelectorAll("#localTransportModes .mode-chip").forEach(chip => {
+      const on = want.has(chip.dataset.value);
+      chip.classList.toggle("active", on);
+      chip.setAttribute("aria-pressed", String(on));
+    });
+  }
+
   initChipSelection() {
     document.querySelectorAll(".chip-selection-grid .select-chip").forEach(chip => {
       chip.addEventListener("click", () => {
@@ -1310,13 +1582,13 @@ class ItineraryPlannerController {
     const budgetInput = document.getElementById("itineraryBudgetInput");
     const foodTypeSelect = document.getElementById("foodType");
     const paceSelect = document.getElementById("itineraryPace");
-    const transportSelect = document.getElementById("itineraryLocalTransport");
+    const transportModes = this.selectedTransportModes();
     const submitBtn = document.getElementById("btnGenerateItinerary");
 
     const budgetPerDay = budgetInput ? parseFloat(budgetInput.value) : 3000;
     const foodType = foodTypeSelect ? foodTypeSelect.value : "no-preference";
     const pace = paceSelect ? paceSelect.value : "moderate";
-    const localTransport = transportSelect ? transportSelect.value : "public";
+    const localTransport = this.primaryTransport(transportModes);
 
     const selectedInterests = Array.from(
       document.querySelectorAll(".chip-selection-grid .select-chip.active")
@@ -1351,6 +1623,7 @@ class ItineraryPlannerController {
       food_preferences: foodPreferences,
       pace,
       transportation: localTransport,
+      transport_modes: transportModes,
       selected_outbound_transport: this.selectedOutbound,
       selected_return_transport: this.selectedReturn,
       rooms: this.rooms,
@@ -1358,7 +1631,7 @@ class ItineraryPlannerController {
       scope_kind: this.scopeInfo ? this.scopeInfo.kind : null,
       arrival_city: this.isBigPlace() ? this.scopeState.arrival : null
     };
-    this.prefs = { budgetPerDay, localTransport, durationDays };
+    this.prefs = { budgetPerDay, localTransport, localModes: transportModes, durationDays };
 
     if (submitBtn) {
       submitBtn.disabled = true;
@@ -1430,50 +1703,8 @@ class ItineraryPlannerController {
     `;
     container.appendChild(headerRow);
 
-    // Attach PDF download handler (Section 23)
-    headerRow.querySelector("#btnDownloadItineraryPdf").addEventListener("click", async (e) => {
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      btn.innerHTML = `<span>Generating PDF…</span>`;
-      try {
-        toast.info("Generating publication-quality PDF…");
-        const pdfBlob = await api.downloadPdf(data.title, {
-          title: data.title,
-          destination: data.destination,
-          source: data.source,
-          duration_days: data.duration_days,
-          trip_overview: data.trip_overview,
-          outbound_transport: data.selected_outbound_transport,
-          return_transport: data.selected_return_transport,
-          hotel: data.selected_hotel,
-          days: data.days,
-          cost_breakdown: data.cost_breakdown,
-          estimated_budget_total: data.estimated_budget_total
-        });
-
-        // Trigger browser file download directly
-        const blobUrl = window.URL.createObjectURL(pdfBlob);
-        const a = document.createElement("a");
-        a.style.display = "none";
-        a.href = blobUrl;
-        a.download = `${data.destination.replace(/\s+/g, '_')}_Itinerary.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(blobUrl);
-        a.remove();
-
-        toast.success("PDF downloaded successfully!");
-      } catch (err) {
-        console.error("PDF download error:", err);
-        toast.error("PDF download failed: " + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>Download PDF</span>
-        `;
-      }
-    });
+    // Attach PDF download handler (Section 23): the same code serves the button at the bottom
+    headerRow.querySelector("#btnDownloadItineraryPdf").addEventListener("click", (e) => this.downloadFullPdf(data, e.currentTarget));
 
     // Mock-mode notice: sample places are for UI testing only, never real data
     if (data.data_mode === "mock") {
@@ -1484,6 +1715,15 @@ class ItineraryPlannerController {
       mockBanner.textContent = "Sample data: MOCK_MODE is on, so the places, days and prices below are demo content (not real places for this destination). Set MOCK_MODE=false in .env for real results.";
       container.appendChild(mockBanner);
     }
+
+    // A picture first: route, stays, numbers, and a map of everything that is planned
+    const glance = document.createElement("div");
+    glance.innerHTML = buildTripGlanceHtml(data);
+    container.appendChild(glance.firstElementChild);
+    const mapBox = document.createElement("div");
+    mapBox.className = "trip-map";
+    container.appendChild(mapBox);
+    renderTripMap(mapBox, data);
 
     // 2. Journey & Hotel Summary Cards
     const journeyCard = document.createElement("div");
@@ -1533,10 +1773,13 @@ class ItineraryPlannerController {
       // How to get to a stop, from the PREVIOUS stop (not the user's current location)
       const renderDirections = (d) => {
         if (!d) return "";
+        const hasBoth = d.walk_minutes != null && d.drive_minutes != null;
         const chips = [
           d.distance_km != null ? `<span class="badge badge-secondary">📏 ~${d.distance_km} km</span>` : "",
-          d.mode ? `<span class="badge badge-secondary">🚦 ${escapeHtml(d.mode)}</span>` : "",
-          d.minutes != null ? `<span class="badge badge-secondary">⏱️ ~${d.minutes} min</span>` : ""
+          hasBoth ? `<span class="badge badge-secondary">🚶 ~${d.walk_minutes} min walk</span>` : "",
+          hasBoth ? `<span class="badge badge-secondary">🚗 ~${d.drive_minutes} min by car/auto</span>` : "",
+          d.mode ? `<span class="badge badge-primary">👍 Suggested: ${escapeHtml(d.mode)}</span>` : "",
+          (!hasBoth && d.minutes != null) ? `<span class="badge badge-secondary">⏱️ ~${d.minutes} min</span>` : ""
         ].join(" ");
         return `
           <div class="stop-directions">
@@ -1557,6 +1800,7 @@ class ItineraryPlannerController {
           <h4 class="stop-name">${escapeHtml(p.name)}</h4>
           ${p.category ? `<div class="stop-meta">${escapeHtml(titleCase(String(p.category)))}${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}${p.admission ? ` · ${escapeHtml(p.admission)}` : ""}</div>` : ""}
           ${p.address ? `<div class="stop-address">📮 ${escapeHtml(p.address)}</div>` : ""}
+          ${placeAboutHtml(p)}
           ${renderDirections(p.directions)}
         </div>
       `;
@@ -1595,17 +1839,22 @@ class ItineraryPlannerController {
         ? `<span class="stop-label hotel">🏨 Hotel / Stay</span> <b>${escapeHtml(dayHotel.name)}</b>${dayHotel.address ? ` — ${escapeHtml(dayHotel.address)}` : ""}`
         : "";
 
+      dayEl.style.setProperty("--day-color", dayColor(day.day_number));
+      const highlights = dayHighlights(day);
       dayEl.innerHTML = `
         <div class="day-card-header">
           <h3 class="day-card-title">Day ${day.day_number}${day.area ? " · " + escapeHtml(day.area) : ""}: ${escapeHtml(day.theme)}</h3>
           <span class="badge badge-primary">${escapeHtml(day.estimated_day_cost)}</span>
         </div>
-        ${startLabel ? `<div class="day-start-point">${startLabel}<div class="stop-meta">Each stop below shows how to reach it from the stop before it. The first stop is measured from here.</div></div>` : ""}
+        ${highlights.length ? `<div class="day-highlights">✨ Today: ${highlights.map(h => `<span>${escapeHtml(h)}</span>`).join("")}</div>` : ""}
+        ${buildDayNotesHtml(day.notes, ["arrival", "hotel_change"])}
+        ${startLabel ? `<div class="day-start-point">${startLabel}<div class="stop-meta">Each stop shows how long it takes to get there from the one before. The first stop is measured from here.</div></div>` : ""}
         ${renderSegment("🌅 Morning", day.morning)}
         ${renderFood("Lunch", day.food_stop_lunch)}
         ${renderSegment("☀️ Afternoon", day.afternoon)}
         ${renderFood("Dinner", day.food_stop_dinner)}
         ${renderSegment("🌙 Evening", day.evening)}
+        ${buildDayNotesHtml(day.notes, ["departure"])}
       `;
 
       daysContainer.appendChild(dayEl);
@@ -1682,7 +1931,59 @@ class ItineraryPlannerController {
 
     // 5. Short version for use while travelling (view first, then download as PDF)
     container.appendChild(this.buildQuickVersionSection(data));
+    container.appendChild(this.buildBottomActions(data));
     announceServiceReady("Itinerary Planner");
+  }
+
+  async downloadFullPdf(data, btn) {
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span>Generating PDF…</span>`;
+    try {
+      toast.info("Generating publication-quality PDF…");
+      const pdfBlob = await api.downloadPdf(data.title, {
+        title: data.title,
+        destination: data.destination,
+        source: data.source,
+        duration_days: data.duration_days,
+        trip_overview: data.trip_overview,
+        outbound_transport: data.selected_outbound_transport,
+        return_transport: data.selected_return_transport,
+        hotel: data.selected_hotel,
+        hotels: data.selected_hotels,
+        days: data.days,
+        cost_breakdown: data.cost_breakdown,
+        estimated_budget_total: data.estimated_budget_total
+      });
+      const blobUrl = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = blobUrl;
+      a.download = `${String(data.destination || "Trip").replace(/\s+/g, "_")}_Itinerary.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      a.remove();
+      toast.success("PDF downloaded successfully!");
+    } catch (err) {
+      console.error("PDF download error:", err);
+      toast.error("PDF download failed: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  }
+
+  /** Download buttons at the very end, so nobody has to scroll back up. */
+  buildBottomActions(data) {
+    const bar = document.createElement("div");
+    bar.className = "itinerary-bottom-actions";
+    bar.innerHTML = `
+      <button type="button" class="btn btn-primary" id="btnDownloadPdfBottom">⬇ Download full PDF</button>
+      <button type="button" class="btn btn-secondary" id="btnBackToTop">↑ Back to top</button>`;
+    bar.querySelector("#btnDownloadPdfBottom").addEventListener("click", (e) => this.downloadFullPdf(data, e.currentTarget));
+    bar.querySelector("#btnBackToTop").addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+    return bar;
   }
 
   /** "Quick version" card at the end of the itinerary: shorter view with map links, then its own PDF. */
@@ -1795,6 +2096,8 @@ class ItineraryPlannerController {
       finalItinerary: this.finalItinerary,
       skeleton: this.skeleton,
       stayChoices: this.stayChoices,
+      transferChoices: this.transferChoices,
+      anchors: this.anchors,
       scope: { info: this.scopeInfo, for: this.scopeFor, state: this.scopeState },
       transportDestination: this.transportDestination,
       rooms: this.rooms,
@@ -1803,7 +2106,7 @@ class ItineraryPlannerController {
         budget: val("itineraryBudgetInput"),
         foodType: val("foodType"),
         pace: val("itineraryPace"),
-        localTransport: val("itineraryLocalTransport"),
+        localTransportModes: this.selectedTransportModes(),
         hotelSort: val("hotelSortSelect"),
         interests,
         cuisines: this.cuisinePicker ? this.cuisinePicker.getTags() : [],
@@ -1838,7 +2141,11 @@ class ItineraryPlannerController {
     set("itineraryBudgetSlider", prefs.budget);
     set("foodType", prefs.foodType);
     set("itineraryPace", prefs.pace);
-    set("itineraryLocalTransport", prefs.localTransport);
+    if (Array.isArray(prefs.localTransportModes)) this.setTransportModes(prefs.localTransportModes);
+    else if (prefs.localTransport) {
+      // trips saved before multi-select
+      this.setTransportModes({ public: ["walking", "public"], walking: ["walking"], driving: ["taxi"] }[prefs.localTransport] || ["walking", "public"]);
+    }
     set("hotelSortSelect", prefs.hotelSort);
     if (Array.isArray(prefs.interests)) {
       document.querySelectorAll(".chip-selection-grid .select-chip").forEach(chip => {
@@ -1877,6 +2184,8 @@ class ItineraryPlannerController {
       this.hotelData = data.hotelData || [];
       this.skeleton = data.skeleton || null;
       this.stayChoices = data.stayChoices || {};
+      this.transferChoices = data.transferChoices || {};
+      this.anchors = data.anchors || {};
       this.transportDestination = data.transportDestination || "";
       this.rooms = data.rooms || null;
       this.prefs = data.tripPrefs || {};

@@ -329,7 +329,7 @@ def test_saved_session_validation_and_limit(client):
 
 
 # ------------------------------------------------------------------ guest sessions
-def test_guest_session_unlocks_planner_but_not_personal_features(client):
+def test_guest_session_unlocks_area_guide_but_not_planner_or_personal_features(client):
     # no login, no guest cookie: planner is blocked
     assert client.post("/api/transport/search", json={}).status_code == 401
     me = client.get("/api/auth/me").json()
@@ -341,8 +341,13 @@ def test_guest_session_unlocks_planner_but_not_personal_features(client):
     me = client.get("/api/auth/me").json()
     assert me["guest"] is True and me["authenticated"] is False and me["user"] is None
 
-    # planner tools now pass the guard (an empty body is a 422 validation error, not a 401)
-    assert client.post("/api/transport/search", json={}).status_code == 422
+    # Area Guide passes the guard for guests (an empty body is a 422 validation error, not a 401)
+    assert client.post("/api/area/summarize", json={}).status_code == 422
+    # the Itinerary Planner and everything it uses is for logged-in accounts only
+    for path in ("/api/transport/search", "/api/transport/flight-dates", "/api/transport/search-leg",
+                 "/api/hotel/search", "/api/transport/terminal-location", "/api/itinerary/scope", "/api/itinerary/generate", "/api/itinerary/finalize"):
+        assert client.post(path, json={}).status_code == 401, path
+    assert client.get("/api/transport/stations", params={"q": "Delhi"}).status_code == 401
     # personal features stay login-only
     assert client.get("/api/history").status_code == 401
     assert client.get("/api/sessions").status_code == 401

@@ -12,6 +12,8 @@ import { renderLoadingSkeletons } from "./loader.js";
 import { toast } from "./toast.js";
 import { announceServiceReady, announceServiceReset } from "./review-widget.js";
 import { initSavedSessions, forgetDraft } from "./saved-sessions.js";
+import { authManager } from "./auth.js";
+import { noteGuestResult, showGuestBanner, saveGuestWorkAfterLogin } from "./guest-banner.js";
 
 const RATE_SERVICE_NAMES = {
   places: "Places Near You",
@@ -53,6 +55,7 @@ export class NearbyExplorerController {
     // 5. Session persistence + Generate New (Sections 19, 20, 22)
     this.setupGenerateNew();
     this.restoreFromSession();
+    this.setupGuestNotice();
     initSavedSessions({
       service: this.config.pageType,
       saveButtonId: "btnSaveSession",
@@ -66,6 +69,28 @@ export class NearbyExplorerController {
           state: snap
         };
       }
+    });
+  }
+
+  /** Guests: warn that nothing is saved. After logging in, the same results are saved to History once. */
+  setupGuestNotice() {
+    const anchor = () => document.getElementById(this.config.resultsContainerId);
+    const refresh = () => {
+      const snap = this.loadSnapshot();
+      if (authManager.isGuest() && snap && Array.isArray(snap.places) && snap.places.length) showGuestBanner(anchor());
+    };
+    if (authManager.ready) refresh();
+    else window.addEventListener("slg:auth-ready", refresh, { once: true });
+
+    saveGuestWorkAfterLogin(this.config.pageType, () => {
+      const snap = this.loadSnapshot();
+      if (!snap || !Array.isArray(snap.places) || !snap.places.length) return null;
+      return {
+        feature_type: this.config.pageType,
+        title: `${this.config.historyTitlePrefix || "Search"}: ${snap.location}`,
+        preview: `${snap.places.length} result${snap.places.length === 1 ? "" : "s"} within ${snap.radius_km} km`,
+        payload: snap
+      };
     });
   }
 
@@ -158,6 +183,7 @@ export class NearbyExplorerController {
 
   /** Resets only THIS service's active input/result state. History is untouched. */
   generateNew() {
+    document.querySelectorAll(".guest-save-banner").forEach((n) => n.remove());
     if (this.currentSearchAbort) this.currentSearchAbort.abort();
     if (this.routeAbortController) this.routeAbortController.abort();
     try {
@@ -346,6 +372,7 @@ export class NearbyExplorerController {
         saved_at: new Date().toISOString()
       };
       this.saveSnapshot(snapshot);
+      noteGuestResult(this.config.pageType, document.getElementById(this.config.resultsContainerId));
 
       api.createHistory({
         feature_type: this.config.pageType,

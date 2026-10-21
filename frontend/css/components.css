@@ -1340,3 +1340,135 @@ body.welcome-open { overflow: hidden; }
 .stay-est { font-size: 0.8rem; color: var(--color-text-muted); }
 .stays-summary h3 { font-size: 1.05rem; margin: 4px 0 4px; }
 .stays-summary li { margin-bottom: 8px; }
+
+/* ==========================================================================
+   BATCH A: scroll progress bar, guest warning, "needs an account" card
+   ========================================================================== */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 4px; z-index: 2147483000;
+  pointer-events: none; background: rgba(var(--color-primary-rgb), 0.10);
+}
+.scroll-progress-bar {
+  height: 100%; width: 100%; transform: scaleX(0); transform-origin: left center; will-change: transform;
+  background: linear-gradient(90deg, var(--color-primary), #F59E0B 60%, var(--color-accent, #EA580C));
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 6px rgba(var(--color-primary-rgb), 0.45);
+}
+@media (prefers-reduced-motion: no-preference) { .scroll-progress-bar { transition: transform 0.08s linear; } }
+
+.guest-save-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; padding: 12px 14px;
+  background: #FEF3C7; color: #78350F; border: 1px solid #F59E0B; border-radius: var(--radius-md); font-size: 0.92rem;
+}
+.guest-save-text { flex: 1 1 260px; }
+[data-theme="dark"] .guest-save-banner { background: rgba(245, 158, 11, 0.14); color: #FCD34D; }
+
+.account-required { max-width: 520px; margin: 60px auto; padding: 32px 24px; text-align: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
+.account-required-icon { font-size: 2.4rem; margin-bottom: 8px; }
+.account-required h1 { font-size: 1.5rem; margin-bottom: 8px; }
+.account-required p { color: var(--color-text-secondary); margin-bottom: 18px; }
+.account-required-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+.mode-chip-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.mode-chip { font: inherit; font-size: 0.92rem; padding: 9px 14px; border-radius: 999px; cursor: pointer; background: var(--color-surface); color: var(--color-text-primary); border: 1px solid var(--color-border); }
+.mode-chip.active { background: rgba(var(--color-primary-rgb), 0.12); border-color: var(--color-primary); font-weight: 700; }
+
+.stay-done, .stay-upcoming { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; }
+.stay-done { border-color: #86EFAC; background: rgba(34, 197, 94, 0.07); }
+.stay-upcoming { opacity: 0.8; border-style: dashed; }
+.stay-done-main { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; flex: 1 1 320px; }
+.stay-done-title { font-weight: 700; }
+.stay-done-hotel { display: flex; flex-direction: column; gap: 2px; font-size: 0.92rem; }
+.itinerary-bottom-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 24px 0 8px; }
+
+
+/* ==========================================================================
+   BATCH B: trip at a glance, trip map, day colours and notes, hotel changes
+   ========================================================================== */
+.trip-glance { margin: 0 0 16px; padding: 18px; border-radius: var(--radius-lg); border: 1px solid var(--color-border);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.10), rgba(245, 158, 11, 0.08)); }
+.glance-title { font-weight: 800; font-size: 1.15rem; margin-bottom: 12px; }
+.glance-route { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
+.glance-node { flex: 0 0 auto; min-width: 96px; max-width: 170px; padding: 10px 12px; text-align: center; background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+.glance-node.stay { border-color: var(--color-primary); }
+.glance-node small { font-size: 0.74rem; color: var(--color-text-muted); }
+.glance-hotel { color: var(--color-text-secondary) !important; white-space: normal; }
+.glance-pin { font-size: 1.3rem; line-height: 1; }
+.glance-link { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; font-size: 1.3rem; color: var(--color-primary); }
+.glance-link.small { font-size: 1.05rem; }
+.glance-link small { font-size: 0.68rem; color: var(--color-text-muted); }
+.glance-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.glance-pill { padding: 5px 12px; border-radius: 999px; background: var(--color-surface); border: 1px solid var(--color-border); font-size: 0.88rem; font-weight: 600; }
+.glance-days { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.glance-day { padding: 6px 12px; border-radius: var(--radius-md); font-size: 0.85rem; background: var(--color-surface); border-left: 5px solid var(--day-color); }
+
+.trip-map:empty { display: none; }
+.trip-map { margin-bottom: 18px; }
+.trip-map-canvas { height: 360px; border-radius: var(--radius-lg); border: 1px solid var(--color-border); overflow: hidden; }
+.trip-map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 0.85rem; color: var(--color-text-secondary); }
+.trip-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.trip-legend-item i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.trip-pin { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 0.85rem;
+  background: var(--day-color, #0F766E); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); cursor: pointer; }
+.trip-pin.food { background: #fff; color: #000; font-size: 0.9rem; }
+.trip-pin.hotel { width: 34px; height: 34px; background: #1F2937; font-size: 1.05rem; }
+
+.day-card, .itinerary-day-card { border-top: 4px solid var(--day-color, var(--color-primary)); }
+.day-card-title { color: var(--day-color, inherit); }
+.day-highlights { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; font-size: 0.88rem; color: var(--color-text-secondary); }
+.day-highlights span { padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--day-color, #0F766E) 14%, transparent); color: var(--color-text-primary); font-weight: 600; }
+.day-note { margin: 10px 0; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--color-border); border-left-width: 5px; background: var(--color-surface-soft); font-size: 0.95rem; }
+.day-note-title { font-weight: 800; margin-bottom: 6px; }
+.day-note ul { margin: 0 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.day-note-arrival { border-left-color: #2563EB; }
+.day-note-hotel_change { border-left-color: #EA580C; background: rgba(234, 88, 12, 0.08); }
+.day-note-departure { border-left-color: #9333EA; }
+
+.hotel-connector { display: flex; gap: 12px; align-items: center; margin: -6px 0 14px; padding: 10px 14px; border-radius: var(--radius-md);
+  background: rgba(234, 88, 12, 0.10); border: 1px dashed #EA580C; font-size: 0.92rem; }
+.hotel-connector > span { font-size: 1.4rem; }
+.hotel-hop { margin-top: 4px; font-size: 0.85rem; color: #C2410C; font-weight: 600; }
+
+.flight-sites { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--color-border-strong); }
+.flight-sites-title { font-weight: 700; margin-bottom: 8px; }
+.flight-sites-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.flight-sites-note { margin-top: 8px; font-size: 0.8rem; color: var(--color-text-muted); }
+.flight-sites-detail { margin-top: 10px; font-size: 0.8rem; color: var(--color-text-muted); }
+
+.scope-fit { color: #166534 !important; font-weight: 700; }
+.stop-about { margin: 6px 0 2px; font-size: 0.95rem; color: var(--color-text-primary); }
+.stop-todo { margin: 2px 0 4px; font-size: 0.9rem; color: var(--color-text-secondary); }
+
+
+/* ==========================================================================
+   BATCH D: travel between stays and hotel "best match"
+   ========================================================================== */
+.transfer-chooser { border-color: var(--color-primary); }
+.transfer-head h3 { font-size: 1.15rem; margin-bottom: 2px; }
+.transfer-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; border-bottom: 1px solid var(--color-border); }
+.transfer-tab { font: inherit; padding: 9px 14px; background: none; border: 0; border-bottom: 3px solid transparent; cursor: pointer; color: var(--color-text-secondary); font-weight: 600; }
+.transfer-tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.transfer-panel { display: flex; flex-direction: column; gap: 10px; }
+.transfer-option { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.transfer-option-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; }
+.transfer-times { font-weight: 700; font-size: 1.02rem; }
+.transfer-option-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.transfer-price { font-weight: 800; font-size: 1.1rem; color: var(--color-primary); }
+.transfer-price small { font-weight: 400; font-size: 0.72rem; color: var(--color-text-muted); }
+.transfer-price.muted { color: var(--color-text-secondary); font-size: 0.95rem; }
+.transfer-option-actions { display: flex; gap: 6px; }
+.transfer-note { margin-bottom: 4px; }
+.transfer-cab, .transfer-other { padding: 12px 14px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-md); }
+.transfer-cab p, .transfer-other p { margin: 0 0 8px; }
+.stay-inbound { margin-top: 4px; font-size: 0.9rem; font-weight: 600; color: var(--color-primary); }
+.btn-link { background: none; border: 0; padding: 0 0 0 6px; font: inherit; font-size: 0.85rem; color: var(--color-primary); text-decoration: underline; cursor: pointer; }
+.hotel-why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 0.78rem; }
+.hotel-why span { padding: 2px 8px; border-radius: 999px; background: var(--color-surface-soft); border: 1px solid var(--color-border); }
+.hotel-why .hotel-match { background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 700; }
+
+.scope-arrival-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.scope-arrival-chip { font: inherit; display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 12px; border-radius: var(--radius-md); cursor: pointer;
+  background: var(--color-surface); color: var(--color-text-primary); border: 1px solid var(--color-border); text-align: left; }
+.scope-arrival-chip small { font-size: 0.72rem; color: var(--color-text-muted); }
+.scope-arrival-chip.active { border-color: var(--color-primary); background: rgba(var(--color-primary-rgb), 0.12); font-weight: 700; }

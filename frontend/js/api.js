@@ -221,6 +221,11 @@ class ApiClient {
     return this._request("/api/itinerary/finalize", { method: "POST", body: JSON.stringify(payload) });
   }
 
+  // Where an airport or station is, to rank hotels by closeness to where the traveller arrives
+  getTerminalLocation(name) {
+    return this._request("/api/transport/terminal-location", { method: "POST", body: JSON.stringify({ name }) });
+  }
+
   // Type-ahead for countries, states and cities
   suggestPlaces(query) {
     return this._request(`/api/places/suggest?q=${encodeURIComponent(query)}`, { method: "GET", silent401: true });

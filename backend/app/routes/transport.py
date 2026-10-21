@@ -2,11 +2,12 @@
 Validates source, destination, dates, and travelers strictly.
 """
 
+import asyncio
 from datetime import date
 from typing import Any, Dict, List, Optional
-from app.security import require_user_or_guest
+from app.security import require_user
 from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.models.transport import (
     FlightDatesRequest,
     FlightDatesResponse,
@@ -19,6 +20,8 @@ from app.models.transport import (
 from app.services.transport_search_service import transport_search_service
 from app.services.flight_service import flight_service
 from app.services.rail_service import rail_service
+from app.services.geocoding_service import geocoding_service
+from app.config import settings
 
 router = APIRouter(prefix="/api/transport", tags=["Transport"])
 
@@ -86,7 +89,7 @@ def validate_transport_request(req: TransportSearchRequest):
         )
 
 
-@router.post("/search", response_model=TransportSearchResponse, dependencies=[Depends(require_user_or_guest)])
+@router.post("/search", response_model=TransportSearchResponse, dependencies=[Depends(require_user)])
 async def search_transport(req: TransportSearchRequest):
     """Search outbound and return flights and trains with deterministic comparison."""
     validate_transport_request(req)
@@ -121,7 +124,7 @@ def _parse_future_date(value: str, label: str) -> date:
     return d
 
 
-@router.get("/stations", response_model=StationSearchResponse, dependencies=[Depends(require_user_or_guest)])
+@router.get("/stations", response_model=StationSearchResponse, dependencies=[Depends(require_user)])
 async def search_stations(q: str = "", limit: int = 20):
     """Railway stations for a city or station name, so the traveller can pick exact stations."""
     limit = 5 if limit < 5 else (50 if limit > 50 else limit)
@@ -129,7 +132,7 @@ async def search_stations(q: str = "", limit: int = 20):
     return StationSearchResponse(query=q.strip(), stations=stations, notice=notice)
 
 
-@router.post("/flight-dates", response_model=FlightDatesResponse, dependencies=[Depends(require_user_or_guest)])
+@router.post("/flight-dates", response_model=FlightDatesResponse, dependencies=[Depends(require_user)])
 async def flight_date_prices(req: FlightDatesRequest):
     """Cheapest flight on the chosen date and the 2 days either side (green / orange / red in the UI)."""
     if req.origin.strip().lower() == req.destination.strip().lower():
@@ -154,7 +157,7 @@ async def flight_date_prices(req: FlightDatesRequest):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
 
-@router.post("/search-leg", response_model=TransportLegResult, dependencies=[Depends(require_user_or_guest)])
+@router.post("/search-leg", response_model=TransportLegResult, dependencies=[Depends(require_user)])
 async def search_one_leg(req: LegSearchRequest):
     """Search flights + trains again for ONE leg on another date (used by the nearby-date chips)."""
     if req.origin.strip().lower() == req.destination.strip().lower():
@@ -172,6 +175,23 @@ async def search_one_leg(req: LegSearchRequest):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
 
+class TerminalLocationRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=120)
+
+
+@router.post("/terminal-location", dependencies=[Depends(require_user)])
+async def terminal_location(req: TerminalLocationRequest):
+    """Where an airport or station is (lat/lon), so hotels can be ranked by closeness to where the traveller arrives.
+    Returns {"found": false} when it cannot be located: nothing is guessed."""
+    if settings.MOCK_MODE:
+        return {"found": False}
+    try:
+        center = await asyncio.to_thread(geocoding_service.resolve_center, location=req.name.strip())
+        return {"found": True, "latitude": center.latitude, "longitude": center.longitude, "name": req.name.strip()}
+    except Exception:
+        return {"found": False}
+
+
 class FlightBookingRequest(BaseModel):
     booking_token: str
     search_params: Dict[str, Any] = {}
@@ -180,7 +200,7 @@ class FlightBookingRequest(BaseModel):
 _ALLOWED_BOOKING_PARAMS = {"departure_id", "arrival_id", "outbound_date", "adults", "currency"}
 
 
-@router.post("/flight-booking", dependencies=[Depends(require_user_or_guest)])
+@router.post("/flight-booking", dependencies=[Depends(require_user)])
 async def flight_booking_options(req: FlightBookingRequest):
     """Return provider-supplied booking options for a selected flight (Section 11).
 

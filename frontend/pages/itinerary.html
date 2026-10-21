@@ -17,8 +17,10 @@
   <link rel="stylesheet" href="../css/components.css">
   <link rel="stylesheet" href="../css/pages.css">
   <link rel="stylesheet" href="../css/responsive.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 </head>
-<body data-requires-session>
+<body data-requires-login data-feature="The Itinerary Planner">
   <div class="app-wrapper">
     <!-- Navbar (Section 26) -->
     <header class="app-navbar" role="banner">
@@ -308,6 +310,13 @@
                 <button type="button" class="select-chip" data-value="bookstores">📚 Bookstores</button>
                 <button type="button" class="select-chip" data-value="libraries">📖 Libraries</button>
                 <button type="button" class="select-chip" data-value="theatre-performing-arts">🎭 Theatre & Performing Arts</button>
+                <button type="button" class="select-chip" data-value="forts-palaces">🏰 Forts & Palaces</button>
+                <button type="button" class="select-chip" data-value="viewpoints-sunsets">🌄 Viewpoints & Sunsets</button>
+                <button type="button" class="select-chip" data-value="lakes-waterfalls">🏞️ Lakes & Waterfalls</button>
+                <button type="button" class="select-chip" data-value="trekking-hiking">🥾 Trekking & Hiking</button>
+                <button type="button" class="select-chip" data-value="wildlife-safari">🦁 Wildlife & Safari</button>
+                <button type="button" class="select-chip" data-value="local-markets-crafts">🧺 Local Markets & Crafts</button>
+                <button type="button" class="select-chip" data-value="festivals-events">🎉 Festivals & Events</button>
               </div>
             </div>
 
@@ -369,12 +378,12 @@
             </div>
 
             <div class="form-group">
-              <label for="itineraryLocalTransport" class="form-label">Local Transportation Mode</label>
-              <select id="itineraryLocalTransport" class="form-select">
-                <option value="public" selected>Public Transit & Walking</option>
-                <option value="walking">Walking Only</option>
-                <option value="driving">Taxi / Auto / E-Rickshaw</option>
-              </select>
+              <span class="form-label" id="localTransportLabel">Local Transportation <span class="train-details-opt">(pick one or more)</span></span>
+              <div class="mode-chip-grid" id="localTransportModes" role="group" aria-labelledby="localTransportLabel">
+                <button type="button" class="mode-chip active" data-value="walking" aria-pressed="true">🚶 Walking</button>
+                <button type="button" class="mode-chip active" data-value="public" aria-pressed="true">🚌 Public transit</button>
+                <button type="button" class="mode-chip" data-value="taxi" aria-pressed="false">🚕 Taxi / Auto / E-rickshaw</button>
+              </div>
             </div>
 
             <div style="grid-column: 1 / -1; margin-top: 10px; display:flex; justify-content:space-between; gap:12px;">

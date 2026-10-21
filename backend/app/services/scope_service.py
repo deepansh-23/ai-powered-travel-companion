@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from app.config import settings
 from app.models.itinerary import ScopeResponse
 from app.services.place_suggest_service import place_suggest_service
+from app.utils.scope_defaults import static_scope
 from app.utils.trip_planner import recommended_areas, scope_advice
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,19 @@ def _clean_items(raw: Any, exclude: str, limit: int) -> List[Dict[str, str]]:
 
 def parse_scope_json(text: str) -> Dict[str, Any]:
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip(), flags=re.MULTILINE).strip()
-    data = json.loads(cleaned)
+    try:
+        data = json.loads(cleaned)
+    except ValueError:
+        # the model sometimes adds a sentence before or after the JSON: take the outermost {...}
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        data = json.loads(cleaned[start:end + 1])
     return data if isinstance(data, dict) else {}
 
 
-def build_scope(kind: str, name: str, days: int, ai: Optional[Dict[str, Any]]) -> ScopeResponse:
-    """Pure assembly of the response (the AI part is passed in), so it can be tested without a network."""
+def build_scope(kind: str, name: str, days: int, ai: Optional[Dict[str, Any]], source: str = "") -> ScopeResponse:
+    """Pure assembly of the response (the AI or built-in part is passed in), so it can be tested without a network."""
     ai = ai or {}
     modes: List[Dict[str, str]] = []
     suggestions: List[Dict[str, str]] = []
@@ -68,10 +76,22 @@ def build_scope(kind: str, name: str, days: int, ai: Optional[Dict[str, Any]]) -
     else:  # country
         suggestions = _clean_items(ai.get("inside"), name, 8)
         s_title = f"States or cities in {name} you would like to visit (optional, we choose if you skip)"
+    big = kind in ("state", "country")
+    gateway = str(ai.get("gateway") or "").strip() if big else ""
+    if gateway.lower() == name.strip().lower():
+        gateway = ""
+    # Cities the traveller can start from: the suggested gateway first, then the other suggested places
+    arrival_options: List[Dict[str, str]] = []
+    if gateway:
+        arrival_options.append({"name": gateway, "note": str(ai.get("gateway_note") or "best place to land")[:60]})
+    for item in suggestions:
+        if item["name"].lower() != gateway.lower() and len(arrival_options) < 6:
+            arrival_options.append({"name": item["name"], "note": item.get("note", "")})
     return ScopeResponse(
         kind=kind, name=name, advice=scope_advice(kind, name, days), recommended_areas=recommended_areas(kind, days),
         modes=modes, suggestions=suggestions, suggestions_title=s_title, neighbours=neighbours, neighbours_title=n_title,
-        needs_arrival=kind in ("state", "country"), source="ai" if ai else "basic",
+        needs_arrival=big, default_arrival=gateway or None, default_arrival_note=str(ai.get("gateway_note") or "") if gateway else "",
+        arrival_options=arrival_options if big else [], source=source or ("ai" if ai else "basic"),
     )
 
 
@@ -96,12 +116,14 @@ class ScopeService:
             ask = ('Return {"nearby": [{"name": "...", "note": "..."}]} with up to 6 real towns or cities within about '
                    f'150 km of {name} that are worth a visit.')
         elif kind == "state":
-            ask = (f'Return {{"inside": [...], "neighbours": [...]}} where "inside" lists up to 8 best cities or areas to base '
-                   f'a trip in {name} and "neighbours" lists up to 4 neighbouring states or regions worth adding. '
-                   'Each item is {"name": "...", "note": "..."}.')
+            ask = (f'Return {{"gateway": "...", "inside": [...], "neighbours": [...]}} where "gateway" is the best city to land in '
+                   f'or start from for {name} (usually its capital or the city with the main airport), "inside" lists up to 8 best '
+                   f'cities or areas to base a trip in {name} and "neighbours" lists up to 4 neighbouring states or regions worth adding. '
+                   'Each list item is {"name": "...", "note": "..."}.')
         else:
-            ask = (f'Return {{"inside": [{{"name": "...", "note": "..."}}]}} listing up to 8 of the best states, regions or '
-                   f'cities to visit in {name} for a {days}-day trip.')
+            ask = (f'Return {{"gateway": "...", "inside": [{{"name": "...", "note": "..."}}]}} where "gateway" is the best city to land in '
+                   f'or start from in {name} (usually the capital or the city with the main international airport) and "inside" lists up to 8 '
+                   f'of the best states, regions or cities to visit in {name} for a {days}-day trip.')
         try:
             from app.services.ai_service import ai_service
             text = await asyncio.wait_for(
@@ -116,7 +138,18 @@ class ScopeService:
         short = clean.split(",")[0].strip() or clean
         kind = await self.detect_kind(clean, kind_hint)
         ai = await self._ask_ai(kind, short, days)
-        return build_scope(kind, short, days, ai)
+        builtin = static_scope(kind, short)
+        if ai and (ai.get("inside") or ai.get("nearby")) and (ai.get("gateway") or kind in ("city", "area")):
+            return build_scope(kind, short, days, ai, "ai")
+        if ai and builtin:
+            # the AI answered only in part: fill the gaps from the built-in list
+            merged = {**builtin, **{k: v for k, v in ai.items() if v}}
+            if ai.get("gateway") and str(ai["gateway"]).lower() != builtin["gateway"].lower():
+                merged["gateway_note"] = ""  # the built-in note described a different city
+            return build_scope(kind, short, days, merged, "ai")
+        if builtin:
+            return build_scope(kind, short, days, builtin, "static")
+        return build_scope(kind, short, days, ai, "ai" if ai else "basic")
 
 
 scope_service = ScopeService()

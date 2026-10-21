@@ -6,10 +6,14 @@ import { state } from "./state.js";
 import { initNavbar } from "./components/navbar.js";
 import { authManager } from "./components/auth.js";
 import { initReviews } from "./components/review-widget.js";
+import { initScrollProgress } from "./components/scroll-progress.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   // Apply saved theme
   document.documentElement.setAttribute("data-theme", state.theme);
+
+  // Reading progress bar at the top of every page
+  initScrollProgress();
 
   // Initialize Navbar
   initNavbar();

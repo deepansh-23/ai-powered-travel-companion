@@ -91,11 +91,25 @@ def build_budget(
 
     # --- travel between stays (estimate) ---------------------------------------
     if transfers:
-        pp = sum(t.get("cost_per_person", 0) for t in transfers)
-        km = sum(t.get("distance_km", 0) for t in transfers)
-        lines.append({"key": "transfers", "label": "Travel between stays (estimate)", "kind": "estimate",
-                      "per_person": _money(pp), "total": _money(pp * travelers),
-                      "note": f"about {km:,} km in total at a rough per-km rate; check real fares"})
+        est_pp = est_km = 0
+        for i, t in enumerate(transfers):
+            mode = t.get("mode")
+            label = t.get("label") or f"{t.get('from_area', '')} → {t.get('to_area', '')}".strip()
+            if t.get("live_price_pp"):
+                # a flight the traveller picked: a real quote, per person
+                pp = t["live_price_pp"]
+                lines.append({"key": f"transfer_{i}", "label": f"Travel {label} ({mode})", "kind": "live",
+                              "per_person": _money(pp), "total": _money(pp * travelers),
+                              "note": f"{_money(pp):,} per person x {travelers}"})
+            elif mode in ("train", "other"):
+                missing.append(f"Travel {label} by {mode}: no fare is available from the data source, so it is not in the total.")
+            else:  # a cab, or no choice made: the distance-based estimate
+                est_pp += t.get("cost_per_person", 0)
+                est_km += t.get("distance_km", 0)
+        if est_pp or est_km:
+            lines.append({"key": "transfers", "label": "Travel between stays by cab (estimate)", "kind": "estimate",
+                          "per_person": _money(est_pp), "total": _money(est_pp * travelers),
+                          "note": f"about {est_km:,} km in total at a rough per-km rate; check real fares"})
 
     # --- estimates from the daily budget --------------------------------------
     estimate_total = 0

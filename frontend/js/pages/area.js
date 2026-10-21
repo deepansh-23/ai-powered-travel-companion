@@ -3,6 +3,8 @@
  */
 
 import { api } from "../api.js";
+import { authManager } from "../components/auth.js";
+import { noteGuestResult, showGuestBanner, saveGuestWorkAfterLogin } from "../components/guest-banner.js";
 import { toast } from "../components/toast.js";
 import { escapeHtml } from "../utils/formatters.js";
 import { announceServiceReady, announceServiceReset } from "../components/review-widget.js";
@@ -50,6 +52,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Guests: warn that nothing is saved; after logging in the same guide is saved to History once
+  const refreshGuestBanner = () => {
+    let snap = null;
+    try { snap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch (_) {}
+    if (authManager.isGuest() && snap && snap.area_name) showGuestBanner(resultsContainer);
+  };
+  if (authManager.ready) refreshGuestBanner();
+  else window.addEventListener("slg:auth-ready", refreshGuestBanner, { once: true });
+  saveGuestWorkAfterLogin("area", () => {
+    let snap = null;
+    try { snap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch (_) {}
+    if (!snap || !snap.area_name) return null;
+    return { feature_type: "area", title: `Area Guide: ${snap.area_name}`, preview: snap.character_summary, payload: snap };
+  });
+
   initSavedSessions({
     service: "area",
     saveButtonId: "btnSaveSession",
@@ -67,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnGenerateNew.addEventListener("click", () => {
       try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
       forgetDraft("area");
+      document.querySelectorAll(".guest-save-banner").forEach((n) => n.remove());
       document.getElementById("areaInput").value = "";
       renderPrompt();
       document.getElementById("areaInput").focus();
@@ -98,6 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // persistent History (survives refresh / reopen)
         const snapshot = { ...res, area_input: areaInput };
         saveSession(snapshot);
+        noteGuestResult("area", resultsContainer);
         api.createHistory({
           feature_type: "area",
           title: `Area Guide: ${res.area_name}`,

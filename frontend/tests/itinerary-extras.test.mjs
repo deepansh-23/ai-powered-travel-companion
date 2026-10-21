@@ -89,3 +89,168 @@ const qv = x.buildQuickVersionHtml({ title: "T", days: [{ day_number: 2, area: "
   selected_hotels: [{ name: "Taj View", area: "Agra" }, { name: "Delhi Inn", area: "Delhi" }] });
 assert(qv.includes("Stay in Agra") && qv.includes("Delhi Inn") && qv.includes("Day 2 · Agra"));
 console.log("phase 2 builders: all assertions passed");
+
+// ---- Batch A: finished and upcoming stays shrink to a card
+const doneBlock = { index: 0, area: "Jaipur", nights: 3, check_in: "2099-03-10", check_out: "2099-03-13", start_day: 1, end_day: 3 };
+const doneHtml = x.buildStayDoneHtml(doneBlock, { name: "Hotel <Pink>", rating: 4.4, nightly_price: 3200, address: "MI Road" });
+assert(doneHtml.includes("stay-done") && doneHtml.includes("Hotel &lt;Pink&gt;") && doneHtml.includes("₹3,200") && doneHtml.includes("MI Road") && doneHtml.includes("stay-change") && doneHtml.includes(">Change<"));
+assert(!doneHtml.includes("stay-find") && !doneHtml.includes("Find hotels"), "a finished stay shows only the chosen hotel");
+assert(x.buildStayDoneHtml(doneBlock, null).includes("No hotel for this stay") && x.buildStayDoneHtml(doneBlock, null).includes("Choose a hotel"));
+const upHtml = x.buildStayUpcomingHtml({ ...doneBlock, index: 1, area: "Agra", nights: 1 });
+assert(upHtml.includes("stay-upcoming") && upHtml.includes("Stay 2: Agra") && upHtml.includes("1 night") && upHtml.includes("choose after the stay above"));
+console.log("batch A builders: all assertions passed");
+
+// ---- Batch B: visuals, day notes, hotel hops
+import { collectTripPoints } from "../js/components/trip-map.js";
+const trip = { source: "Delhi", destination: "Rajasthan", duration_days: 4, estimated_budget_total: "₹82,800 total estimate",
+  selected_outbound_transport: { mode: "flight" }, selected_return_transport: { mode: "train" },
+  areas: ["Jaipur", "Udaipur"], selected_hotels: [{ name: "Pink Inn", area: "Jaipur", latitude: 26.92, longitude: 75.8 }, { name: "Lake View", area: "Udaipur", latitude: 24.58, longitude: 73.68 }],
+  stay_blocks: [{ index: 0, area: "Jaipur", nights: 2, needs_hotel: true, hotel: { name: "Pink Inn" } }, { index: 1, area: "Udaipur", nights: 1, needs_hotel: true, hotel: { name: "Lake View" } }],
+  transfers: [{ to_stay: 1, distance_km: 395 }],
+  days: [{ day_number: 1, theme: "Pink city", area: "Jaipur", morning: { places: [{ name: "Hawa Mahal", latitude: 26.92, longitude: 75.82 }] }, afternoon: { places: [{ name: "City Palace", latitude: 26.93, longitude: 75.82 }] },
+          food_stop_lunch: { name: "Laxmi Misthan", latitude: 26.92, longitude: 75.82 }, evening: { places: [] }, notes: [{ type: "arrival", title: "Getting there", icon: "✈️", lines: ["Today you fly <Delhi> → Jaipur."] }] },
+         { day_number: 2, theme: "Forts", area: "Jaipur", morning: { places: [{ name: "Amber Fort" }] }, afternoon: { places: [] }, evening: { places: [] },
+           notes: [{ type: "hotel_change", title: "Changing hotel today", lines: ["Check out of Pink Inn by 11:00."] }, { type: "departure", title: "Heading home", lines: ["Be at the airport by 16:30."] }] }] };
+const g = x.buildTripGlanceHtml(trip);
+assert(g.includes("Your trip at a glance") && g.includes("Delhi") && g.includes("Jaipur") && g.includes("Udaipur") && g.includes("Pink Inn") && g.includes("~395 km"));
+assert(g.includes("✈️") && g.includes("🚆") && g.includes("4 days") && g.includes("3 nights") && g.includes("₹82,800") && g.includes("Day 1") && g.includes("Pink city"));
+assert(g.includes("2 hotels") && g.includes("3 places"), "counts places across days");
+assert(!x.buildTripGlanceHtml({ ...trip, stay_blocks: [], selected_hotels: [] }).includes("undefined"));
+const topNotes = x.buildDayNotesHtml(trip.days[0].notes, ["arrival", "hotel_change"]);
+assert(topNotes.includes("day-note-arrival") && topNotes.includes("Today you fly &lt;Delhi&gt;"));
+assert(x.buildDayNotesHtml(trip.days[1].notes, ["arrival", "hotel_change"]).includes("Changing hotel today"));
+assert(!x.buildDayNotesHtml(trip.days[1].notes, ["arrival", "hotel_change"]).includes("Heading home"));
+assert(x.buildDayNotesHtml(trip.days[1].notes, ["departure"]).includes("Heading home"));
+assert.deepEqual(x.dayHighlights(trip.days[0]), ["Hawa Mahal", "City Palace"]);
+assert(x.dayColor(1) !== x.dayColor(2) && x.dayColor(8) === x.dayColor(1));
+const hop = x.hotelHop({ latitude: 26.92, longitude: 75.8 }, { latitude: 24.58, longitude: 73.68 });
+assert(hop.km > 300 && hop.minutes > 300 && x.hotelHop({}, { latitude: 1, longitude: 1 }) === null);
+const conn = x.buildHotelConnectorHtml({ name: "Pink Inn", latitude: 26.92, longitude: 75.8 }, { name: "Lake <View>", latitude: 24.58, longitude: 73.68 });
+assert(conn.includes("Changing hotel") && conn.includes("Pink Inn") && conn.includes("Lake &lt;View&gt;") && conn.includes("km</b> apart") && conn.includes("estimate"));
+assert(x.buildHotelConnectorHtml({ name: "A" }, { name: "B" }).includes("distance not available"));
+const stays2 = x.buildStaysSummaryHtml({ stay_blocks: [{ index: 0, area: "Jaipur", nights: 2, needs_hotel: true, hotel: { name: "Pink Inn", latitude: 26.92, longitude: 75.8 } },
+  { index: 1, area: "Udaipur", nights: 1, needs_hotel: true, hotel: { name: "Lake View", latitude: 24.58, longitude: 73.68 } }], transfers: [] });
+assert(stays2.includes("Changing hotel from Pink Inn") && stays2.includes("km, roughly"));
+const pts = collectTripPoints(trip);
+assert(pts.places.length === 3 && pts.places.filter((p) => p.food).length === 1 && pts.hotels.length === 2);
+assert(pts.places.every((p) => p.lat != null && p.day >= 1), "places without coordinates are left off the map");
+console.log("batch B builders: all assertions passed");
+
+// ---- Alternative flight booking links
+const flightParams = { departure_id: "DEL", arrival_id: "FCO", outbound_date: "2026-11-04", adults: 2, currency: "INR" };
+const siteLinks = x.buildFlightSiteLinks(flightParams);
+assert.deepEqual(siteLinks.map((s) => s.name), ["Google Flights", "Skyscanner", "Kayak"]);
+assert(siteLinks[0].url.startsWith("https://www.google.com/travel/flights?q=") && decodeURIComponent(siteLinks[0].url).includes("Flights to FCO from DEL on 2026-11-04 one way"));
+assert(siteLinks[1].url === "https://www.skyscanner.co.in/transport/flights/del/fco/261104/?adultsv2=2&cabinclass=economy&currency=INR");
+assert(siteLinks[2].url === "https://www.kayak.co.in/flights/DEL-FCO/2026-11-04/2adults");
+assert.deepEqual(x.buildFlightSiteLinks({}), [], "nothing is guessed without a route and date");
+assert.deepEqual(x.buildFlightSiteLinks({ ...flightParams, departure_id: "DEL,BOM" }), []);
+assert.deepEqual(x.buildFlightSiteLinks({ ...flightParams, outbound_date: "04/11/2026" }), []);
+const siteHtml = x.buildFlightSiteLinksHtml(flightParams);
+assert(siteHtml.includes("Or book on a flight website") && siteHtml.includes('rel="noopener noreferrer"') && siteHtml.includes("DEL → FCO on 2026-11-04") && siteHtml.includes("Prices there can differ"));
+assert(x.buildFlightSiteLinksHtml(null) === "");
+console.log("flight site links: all assertions passed");
+
+// ---- Booking dialog heading can be set; default unchanged
+assert(x.buildFlightSiteLinksHtml(flightParams, "Book on a flight website").includes("Book on a flight website"));
+assert(!x.buildFlightSiteLinksHtml(flightParams, "Book on a flight website").includes("Or book on"));
+console.log("booking dialog heading: ok");
+
+// ---- Batch C: scope follows the trip length, place "about", scroll progress
+import { computeProgress } from "../js/components/scroll-progress.js";
+assert(x.recommendedAreas("country", 14) === 4 && x.recommendedAreas("country", 3) === 1 && x.recommendedAreas("country", 30) === 5);
+assert(x.recommendedAreas("state", 3) === 1 && x.recommendedAreas("state", 8) === 4 && x.recommendedAreas("city", 9) === 3 && x.recommendedAreas("city", 2) === 1);
+assert(x.scopeAdviceText("country", "Italy", 10, 5) === "Italy is a whole country. With 10 day(s), about 3 place(s) to stay in works best, so less time is spent travelling between them. You picked 5; that is possible but will mean more travelling.");
+assert(x.scopeAdviceText("city", "Jaipur", 6).includes("add up to 1 nearby place(s)") && !x.scopeAdviceText("city", "Jaipur", 2).includes("nearby"));
+// fewer days -> fewer suggested places, more days -> more (what changing the dates now does)
+assert(x.recommendedAreas("country", 12) > x.recommendedAreas("country", 6));
+const sc = { kind: "country", name: "Italy", advice: "a", recommended_areas: 2, needs_arrival: true, modes: [], source: "ai",
+  suggestions: [{ name: "Rome" }, { name: "Florence" }, { name: "Venice" }, { name: "Milan" }], suggestions_title: "Where?" };
+const panel = x.buildScopePanelHtml(sc, { mode: "", selected: [], neighbourSelected: [], arrival: "" }, { days: 6, refreshDays: 12 });
+assert((panel.match(/fits your 6 days/g) || []).length === 2, "only the best-fitting suggestions are marked");
+assert(panel.includes('id="scopeRefresh"') && panel.includes("Refresh suggestions for 12 days"));
+assert(!x.buildScopePanelHtml(sc, { mode: "", selected: [] }, { days: 6 }).includes("scopeRefresh"));
+assert(!x.buildScopePanelHtml({ ...sc, recommended_areas: 4 }, { mode: "", selected: [] }, { days: 6 }).includes("fits your"), "no marks when everything fits");
+const about = x.placeAboutHtml({ about: "A pink <palace>.", what_to_do: "Look up." });
+assert(about.includes("A pink &lt;palace&gt;.") && about.includes("What to do:") && x.placeAboutHtml({}) === "");
+assert(computeProgress({ scrollY: 0, scrollHeight: 3000, viewportHeight: 1000 }) === 0);
+assert(computeProgress({ scrollY: 1000, scrollHeight: 3000, viewportHeight: 1000 }) === 0.5);
+assert(computeProgress({ scrollY: 5000, scrollHeight: 3000, viewportHeight: 1000 }) === 1);
+assert(computeProgress({ scrollY: 50, scrollHeight: 800, viewportHeight: 1000 }) === 0, "a page that does not scroll shows no progress");
+assert(computeProgress({ scrollY: -20, scrollHeight: 3000, viewportHeight: 1000 }) === 0);
+console.log("batch C builders: all assertions passed");
+
+// ---- Batch D: travel between stays, hotel best match
+const tr = { from_area: "Jaipur", to_area: "Agra", distance_km: 291, hours: 5.8, cost_per_person: 1018, note: "Road/rail estimate.", date: "2099-03-12", needs_choice: true };
+const blk = { index: 1, area: "Agra" };
+const chooser = x.buildTransferChooserHtml(blk, tr, "train");
+assert(chooser.includes("How will you get from Jaipur to Agra?") && chooser.includes("2099-03-12") && chooser.includes('data-tab="flight"') && chooser.includes('data-tab="train"') && chooser.includes('data-tab="other"') && chooser.includes('data-tab="cab"'));
+assert(chooser.includes('transfer-tab active" data-tab="train"') && !chooser.includes('transfer-tab active" data-tab="flight"'));
+const legData = { flights: [{ id: "f1", operator: "IndiGo", number: "6E 1", departure_time: "2099-03-12 09:00", arrival_time: "2099-03-12 10:05", duration_formatted: "1h 5m", stops: 0, price: 3500, origin: "JAI (Jaipur Airport)", destination: "AGR (Agra Airport)" }, { id: "f2", operator: "Air X", price: null, stops: 1 }],
+  trains: [{ id: "t1", operator: "Indian Railways (Shatabdi)", number: "12001", departure_time: "2099-03-12 08:10", arrival_time: "2099-03-12 11:25", duration_formatted: "3h 15m", origin: "JP Station", destination: "AGC Station" }] };
+const flightsPanel = x.buildTransferPanelHtml("flight", legData, tr, {});
+assert(flightsPanel.includes("₹3,500") && flightsPanel.includes("per person") && flightsPanel.includes("09:00 → 10:05") && flightsPanel.includes("Direct") && flightsPanel.includes("Jaipur Airport → Agra Airport"));
+assert(flightsPanel.includes("transfer-book") && flightsPanel.includes("Price not available") && flightsPanel.includes('data-kind="flight"'));
+const trainsPanel = x.buildTransferPanelHtml("train", legData, tr, {});
+assert(trainsPanel.includes("Shatabdi") && trainsPanel.includes("Fare not provided") && trainsPanel.includes("irctc.co.in") && trainsPanel.includes("not provided by our data source") && !trainsPanel.includes("transfer-book"));
+assert(x.buildTransferPanelHtml("flight", null, tr, { loading: true }).includes("Searching flights"));
+assert(x.buildTransferPanelHtml("train", null, tr, { error: true }).includes("Could not load options"));
+assert(x.buildTransferPanelHtml("train", { trains: [], rail_notice: "Train search covers India only." }, tr, {}).includes("India only"));
+assert(x.buildTransferPanelHtml("flight", legData, { ...tr, date: null }, {}).includes("Add travel dates"));
+const cabPanel = x.buildTransferPanelHtml("cab", null, tr, {});
+assert(cabPanel.includes("291 km") && cabPanel.includes("₹1,018") && cabPanel.includes("estimate") && cabPanel.includes('data-kind="cab"') && !cabPanel.includes("transfer-option"));
+const otherPanel = x.buildTransferPanelHtml("other", null, tr, {});
+assert(otherPanel.includes("rome2rio.com/s/Jaipur/Agra") && otherPanel.includes("travelmode=transit") && otherPanel.includes("not priced here") && otherPanel.includes('data-kind="other"'));
+assert(x.otherTravelLinks("New Delhi", "Agra")[0].url === "https://www.rome2rio.com/s/New%20Delhi/Agra");
+assert(x.buildTransferSummaryLine({ mode: "cab" }).includes("cab") && x.buildTransferSummaryLine({ mode: "other" }).includes("arrange"));
+const sumF = x.buildTransferSummaryLine({ mode: "flight", option: legData.flights[0] });
+assert(sumF.includes("✈️") && sumF.includes("6E 1") && sumF.includes("09:00 → 10:05") && sumF.includes("₹3,500 per person"));
+assert(x.buildTransferSummaryLine({ mode: "train", option: legData.trains[0] }).includes("fare not provided") && x.buildTransferSummaryLine(null) === "");
+assert(x.buildStayDoneHtml({ index: 1, area: "Agra", nights: 1, start_day: 3, end_day: 4 }, { name: "H" }, "✈️ IndiGo 6E 1").includes("✈️ IndiGo 6E 1"));
+assert(x.buildStayBlockHtml({ index: 1, area: "Agra", nights: 1, start_day: 3, end_day: 4 }, undefined, "🚆 Shatabdi").includes("Change travel"));
+assert(!x.buildStayBlockHtml({ index: 0, area: "Agra", nights: 1, start_day: 1, end_day: 2 }, undefined).includes("Change travel"));
+assert(x.buildStayBlockHtml({ index: 0, area: "A", nights: 1, start_day: 1, end_day: 2 }, undefined).includes('value="best_match"'));
+assert(x.buildTransfersHtml([{ ...tr, choice: { mode: "flight", operator: "IndiGo", number: "6E 1", departure_time: "2099-03-12 09:00", arrival_time: "2099-03-12 10:05", price: 3500 } }]).includes("IndiGo"));
+assert(x.buildTransfersHtml([{ ...tr, choice: { mode: "cab" } }]).includes("(cab)"));
+assert(x.buildTripGlanceHtml({ source: "Delhi", duration_days: 3, stay_blocks: [{ index: 0, area: "Jaipur", nights: 1, needs_hotel: true }, { index: 1, area: "Agra", nights: 1, needs_hotel: true }],
+  transfers: [{ to_stay: 1, distance_km: 291, choice: { mode: "train" } }], days: [] }).includes("🚆<small>~291 km"));
+
+// hotels: best match combines distance, price, rating and arrival closeness
+const centre = { lat: 26.9, lon: 75.8 };
+const hotels = [
+  { id: "far-cheap", name: "Far & cheap", latitude: 27.3, longitude: 76.3, nightly_price: 1500, rating: 3.9 },
+  { id: "near-pricey", name: "Near & pricey", latitude: 26.905, longitude: 75.805, nightly_price: 9000, rating: 4.6 },
+  { id: "near-fair", name: "Near & fair", latitude: 26.91, longitude: 75.81, nightly_price: 3000, rating: 4.5 },
+  { id: "no-coords", name: "No coords", nightly_price: 2500, rating: 4.0 }];
+const ranked = x.scoreHotels(hotels, { centroid: centre });
+assert(ranked[0].hotel.id === "near-fair", "close, fairly priced and well rated wins: " + ranked.map((r) => r.hotel.id));
+assert(ranked.every((r) => r.score >= 0 && r.score <= 100) && ranked.length === 4);
+assert(ranked.find((r) => r.hotel.id === "near-fair").why.some((w) => w.includes("km from where you will spend your days")));
+assert(ranked.find((r) => r.hotel.id === "no-coords").spotsKm === null, "missing coordinates are skipped, not guessed");
+assert(ranked.find((r) => r.hotel.id === "near-pricey").hotel.rating >= 4.5 && ranked.find((r) => r.hotel.id === "near-pricey").why.includes("⭐ Highly rated"));
+const withAnchor = x.scoreHotels(hotels, { centroid: centre, anchor: { lat: 27.3, lon: 76.3, label: "Jaipur Airport" } });
+assert(withAnchor.find((r) => r.hotel.id === "far-cheap").why.some((w) => w.includes("km from Jaipur Airport")));
+assert(withAnchor.find((r) => r.hotel.id === "far-cheap").score > ranked.find((r) => r.hotel.id === "far-cheap").score, "being near the airport helps a hotel");
+assert(withAnchor[0].why.some((w) => w.startsWith("🛬")) && x.scoreHotels(hotels, { centroid: centre, anchor: { lat: 1, lon: 1, label: "Agra Cantt Station" } })[0].why.some((w) => w.startsWith("🚉")));
+assert.deepEqual(x.scoreHotels([], {}), []);
+assert(x.buildMatchChipsHtml(ranked[0]).includes("% match") && x.buildMatchChipsHtml(null) === "");
+assert(x.haversineKm({ lat: 26.92, lon: 75.8 }, { lat: 24.58, lon: 73.68 }) > 300);
+console.log("batch D builders: all assertions passed");
+assert(withAnchor.findIndex((r) => r.hotel.id === "no-coords") > withAnchor.findIndex((r) => r.hotel.id === "near-fair"), "missing data never lifts a hotel");
+console.log("hotel ranking guard: ok");
+
+// ---- Plan your area: a suggested start city and places to choose from
+const italy = { kind: "country", name: "Italy", advice: "a", recommended_areas: 3, needs_arrival: true, modes: [], source: "static",
+  default_arrival: "Rome", default_arrival_note: "capital",
+  arrival_options: [{ name: "Rome", note: "capital" }, { name: "Florence", note: "Art" }, { name: "Venice", note: "Canals" }],
+  suggestions: [{ name: "Florence", note: "Art" }, { name: "Venice", note: "Canals" }, { name: "Milan", note: "Fashion" }], suggestions_title: "Where?" };
+const italyHtml = x.buildScopePanelHtml(italy, { mode: "", selected: [], neighbourSelected: [], arrival: "Rome" }, { days: 10 });
+assert(italyHtml.includes('data-city="Rome"') && italyHtml.includes("★ Rome") && italyHtml.includes('data-city="Florence"') && italyHtml.includes('data-city="Venice"'));
+assert(italyHtml.includes('scope-arrival-chip active" data-city="Rome"') && !italyHtml.includes('scope-arrival-chip active" data-city="Venice"'));
+assert(italyHtml.includes('id="scopeArrival"') && italyHtml.includes('value="Rome"') && italyHtml.includes("We suggest Rome (capital)") && italyHtml.includes("Pick another start"));
+assert(italyHtml.includes("Popular places from our built-in list") && italyHtml.includes('value="Milan"') && italyHtml.includes('class="scope-check"'));
+const venice = x.buildScopePanelHtml(italy, { mode: "", selected: [], arrival: "venice" }, { days: 10 });
+assert(venice.includes('scope-arrival-chip active" data-city="Venice"') && !venice.includes('scope-arrival-chip active" data-city="Rome"'), "choosing another start city highlights it");
+const noDefault = x.buildScopePanelHtml({ ...italy, default_arrival: null, arrival_options: [], source: "basic", suggestions: [] }, { mode: "", selected: [], arrival: "" }, { days: 10 });
+assert(noDefault.includes('id="scopeArrival"') && !noDefault.includes("scope-arrival-chip") && !noDefault.includes("We suggest"));
+console.log("plan-your-area start city: all assertions passed");

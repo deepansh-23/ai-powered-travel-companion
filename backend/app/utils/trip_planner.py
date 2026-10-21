@@ -18,6 +18,14 @@ ROAD_SPEED_KMH = 50.0
 COST_PER_KM_PER_PERSON = 3.5   # INR, mixed bus/train/shared cab: an ESTIMATE, always labelled as one
 
 
+LONG_TRANSFER_KM = 200  # from this distance on, the traveller chooses how to travel between two stays
+
+
+def transfer_needs_choice(kind: Optional[str], distance_km: float) -> bool:
+  """Country trips always ask how to get between places; other trips ask once the move is long."""
+  return kind == "country" or distance_km >= LONG_TRANSFER_KM
+
+
 # ---------------------------------------------------------------- scope advice
 def recommended_areas(kind: str, days: int) -> int:
     """A sensible number of places to stay in, so the trip is not all travelling."""

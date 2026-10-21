@@ -47,14 +47,21 @@ except ImportError:
 # -----------------------------------------------------------------------
 # System Prompt (Enforces Rich Detail & Grounding)
 # -----------------------------------------------------------------------
-_GEMINI_SYSTEM_PROMPT = """You are an expert local travel guide and itinerary planner.
+_GEMINI_SYSTEM_PROMPT = """You are a friendly, well-travelled local guide planning a trip for a friend.
 
 Your output MUST be a detailed, rich, highly structured JSON response that breaks down the day logically.
+
+VOICE (very important): write like a helpful friend, not a brochure or a manual.
+- Talk to the traveller as "you". Use short, simple sentences and everyday words.
+- Say what a place feels like and why it is worth the time ("Walk the old lanes and stop for chai"), not formal descriptions.
+- Never use words like "itinerary segment", "utilise", "facilitate", "ambience", "curated", "iconic", "nestled" or "bustling".
+- Keep every description to 1 or 2 short sentences. Day themes are short and fun (3 to 6 words).
+- Practical tips should be concrete and kind ("Go early, it gets crowded after 11"), never vague.
 
 FORMATTING & CONTENT GUIDELINES:
 1. FOCUS & HIGHLIGHTS: For each segment or landmark, provide specific sub-fields:
    - "focus": Category/theme tags (e.g., "History & Hidden Memorials", "North Indian Vegetarian", "Shopping & Architecture").
-   - "what_to_do": A 2-3 sentence step-by-step description of what visitors should experience, view, or do.
+   - "what_to_do": 1-2 short, friendly sentences on what to see or do there (plain words, no jargon).
    - "what_to_try": Specific culinary items to order at food stops (e.g., "Amritsari Stuffed Kulcha with spicy chole, fresh butter, and hot chai").
    - "transport": Concrete advice on transit (e.g., "Walk 2 minutes", "Take a ₹30–₹50 e-rickshaw ride").
    - "cost": Itemized entry fee or food cost per person in INR.
@@ -69,6 +76,16 @@ FORMATTING & CONTENT GUIDELINES:
 
 4. GROUNDING SAFETY:
    - Use verified places provided where available. If verified list is empty or insufficient, draw from famous, well-established historical landmarks and culinary spots for the specified destination.
+
+5. EVENINGS AND NIGHTS (make them real, not filler):
+   - The evening starts around 5:30 PM and runs until the day naturally ends, anywhere between 9 PM and 11:30 PM. Do not stop at 8 PM, and never write "stroll around the local area" or "relax at a local place".
+   - Every evening has at least 2 concrete stops in "evening.places", for example a sunset viewpoint, a night market, a lively street, a lakeside or riverside walk, a cultural spot or a show, plus dinner. Prefer verified places that suit the evening (markets, promenades, viewpoints, parks, entertainment venues, lively eateries).
+   - Only mention a show, light display or event if it is a regular, well-known part of that place, and add "check timings". Never invent a specific event, performance or date.
+   - Timing is flexible, not fixed. Leave a 7 to 9 hour rest window at the hotel: after a late night start the next day later (up to 9:30 AM), otherwise start between 8:00 and 9:00 AM. Give every segment a realistic "time_window"; the windows differ from day to day.
+
+6. ABOUT EACH PLACE:
+   - Every place needs "about": 1 or 2 friendly sentences saying what it is and why people visit (what kind of place it is, what it is known for, and roughly when it was built only if you are sure). Stay general when unsure and never invent facts, dates or numbers.
+   - "what_to_do" is separate: what to do or see while you are there.
 """
 
 
@@ -328,41 +345,29 @@ class AIService:
         else "[]"
     )
 
-    transport_context_lines = []
-    if req.selected_outbound_transport and isinstance(req.selected_outbound_transport, dict):
-      ob = req.selected_outbound_transport
-      ob_mode = ob.get("mode", "transport")
-      ob_op = ob.get("operator", "")
-      ob_num = ob.get("number", "")
-      ob_dep = ob.get("departure_time", "")
-      ob_arr = ob.get("arrival_time", "")
-      ob_dst = ob.get("destination", dest_name)
-      transport_context_lines.append(
-          f"- OUTBOUND TRANSPORT: {ob_mode.capitalize()} {ob_op} {ob_num} departing at {ob_dep}, arriving at {ob_dst} at {ob_arr}. CRITICAL: Do NOT schedule activities before realistic arrival. Account for arrival transit buffer to hotel/center."
-      )
+    # Day 1 may only start after the traveller has landed and settled in; the last day must end in time
+    # for the journey home. These times are worked out in code (utils.day_timing), not left to the AI.
+    from app.utils.day_timing import day_windows, window_prompt_lines
+    windows = day_windows(
+        req.selected_outbound_transport if isinstance(req.selected_outbound_transport, dict) else None,
+        req.selected_return_transport if isinstance(req.selected_return_transport, dict) else None,
+        req.duration_days,
+    )
+    transport_prompt_block = "\n".join(window_prompt_lines(windows, req.duration_days))
 
-    if req.selected_return_transport and isinstance(req.selected_return_transport, dict):
-      ib = req.selected_return_transport
-      ib_mode = ib.get("mode", "transport")
-      ib_op = ib.get("operator", "")
-      ib_num = ib.get("number", "")
-      ib_dep = ib.get("departure_time", "")
-      ib_orig = ib.get("origin", dest_name)
-      transport_context_lines.append(
-          f"- RETURN TRANSPORT: {ib_mode.capitalize()} {ib_op} {ib_num} departing from {ib_orig} at {ib_dep}. CRITICAL: On Day {req.duration_days}, schedule hotel checkout, departure buffer (2h for flight, 1h for train), and transit to station/airport before {ib_dep}."
-      )
-
-    if req.selected_hotel and isinstance(req.selected_hotel, dict):
-      htl = req.selected_hotel
-      htl_name = htl.get("name", "Hotel")
-      htl_addr = htl.get("address", "")
-      transport_context_lines.append(
-          f"- SELECTED ACCOMMODATION: {htl_name} ({htl_addr}). Integrate transfers to and from this hotel into daily morning departures and evening returns."
-      )
-
-    transport_prompt_block = "\n".join(transport_context_lines) if transport_context_lines else "None specified. Assume arrival on Day 1 morning."
 
     food_prefs_str = ", ".join(req.food_preferences) if req.food_preferences else "Authentic regional specialties"
+
+    modes_names = {"walking": "walking", "public": "public transit (bus/metro)", "taxi": "taxi / auto / e-rickshaw"}
+    modes = req.transport_modes or {"public": ["walking", "public"], "walking": ["walking"], "driving": ["taxi"]}.get(
+        req.transportation, ["walking", "public"])
+    modes_line = ", ".join(modes_names[m] for m in modes if m in modes_names)
+    wants_local = any("local special" in (f or "").lower() for f in (req.food_preferences or []))
+    local_block = (
+        "\n4. LOCAL SPECIALITIES REQUESTED: make most lunch, dinner and cafe stops places known for the area's "
+        "famous local dishes and drinks. In each food stop's \"recommendation\" name the signature local dish to order. "
+        "Still choose only from the verified places below.\n"
+    ) if wants_local else "\n"
 
     schedule = list(req.area_schedule or [])
     if schedule:
@@ -392,7 +397,8 @@ TRANSPORT & ACCOMMODATION CONSTRAINTS (TIME-AWARE):
 FOOD PRIORITIZATION:
 1. Priority 1: Authentic, traditional local/regional cuisine of {dest_name}.
 2. Dietary constraint: {req.food_type}.
-3. Preferences: {food_prefs_str}.
+3. Preferences: {food_prefs_str}.{local_block}
+LOCAL TRANSPORT the traveller is happy with: {modes_line}. Keep the distance between stops reasonable for these.
 
 VERIFIED PLACES FROM GEOAPIFY:
 {places_json}
@@ -409,7 +415,7 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
       "area": "Name of the area this day is spent in",
       "estimated_day_cost": "₹{daily_total:,} total estimate",
       "morning": {{
-        "time_window": "08:00 AM – 12:00 PM",
+        "time_window": "08:30 AM – 12:00 PM (times are examples: adjust them to the day)",
         "title": "Historical & Sacred Exploration",
         "focus": "Religious Place, Architecture, History",
         "description": "Detailed walkthrough of morning activities.",
@@ -422,6 +428,7 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
             "address": "Street / District",
             "duration": "1.5 hours",
             "admission": "Free entry / ₹10",
+            "about": "What this place is and why people visit it, in 1-2 friendly sentences.",
             "what_to_do": "Specific highlights to see inside."
           }}
         ]
@@ -452,12 +459,23 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
         "cost_per_person": "Approx. ₹80–₹120 per person"
       }},
       "evening": {{
-        "time_window": "05:00 PM – 08:30 PM",
-        "title": "Heritage Shopping & Evening Atmosphere",
-        "focus": "Shopping, Footwear & Night Views",
-        "description": "Evening activities guide.",
-        "what_to_do": "Wander Heritage Street and markets.",
-        "transport_note": "Walking distance"
+        "time_window": "05:30 PM – 10:00 PM (ends when the plan naturally ends)",
+        "title": "Sunset, Night Market & Late Dinner",
+        "focus": "Night Views, Markets & Evening Life",
+        "description": "Evening activities guide in 1-2 friendly sentences.",
+        "what_to_do": "What to do across the evening.",
+        "transport_note": "Walking distance",
+        "places": [
+          {{
+            "name": "Sunset Viewpoint / Night Market (a verified place)",
+            "category": "Viewpoint / Market",
+            "address": "Street / District",
+            "duration": "1.5 hours",
+            "admission": "Free",
+            "about": "What this place is and why it is lovely after dark.",
+            "what_to_do": "Watch the sunset, then browse the stalls."
+          }}
+        ]
       }}
     }}
   ],
