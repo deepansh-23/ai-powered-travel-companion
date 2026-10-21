@@ -28,5 +28,5 @@ if __name__ == "__main__":
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,
-        reload_dirs=[str(BACKEND_DIR / "app")]
+        reload_dirs=[str(BACKEND_DIR / "app"), str(BACKEND_DIR / "admin")]
     )

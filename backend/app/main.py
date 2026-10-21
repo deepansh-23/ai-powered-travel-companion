@@ -27,6 +27,7 @@ from app.routes import (
     sessions
 )
 from app.db import dispose_db, init_db
+from admin.routes import router as admin_router
 
 
 @asynccontextmanager
@@ -67,9 +68,15 @@ app.include_router(captcha.router)
 app.include_router(feedback.router)
 app.include_router(auth.router)
 app.include_router(sessions.router)
+app.include_router(admin_router)
 
 
 # Mount frontend directory for seamless local single-command running
+# Admin static files are served under /admin (isolated from main frontend)
+admin_frontend_path = settings.FRONTEND_DIR / "admin"
+if admin_frontend_path.exists():
+    app.mount("/admin", StaticFiles(directory=str(admin_frontend_path), html=True), name="admin_frontend")
+
 frontend_path = settings.FRONTEND_DIR
 if frontend_path.exists():
     app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")

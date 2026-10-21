@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Control Center — AI Powered Travel Companion</title>
+  <meta name="description" content="Secure admin dashboard for AI Powered Travel Companion.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <!-- Admin-only stylesheet — completely isolated from main app -->
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<!-- adm-body class scopes all admin CSS selectors -->
+<body class="adm-body">
+
+<!-- Auth gate — shown while checking, replaced on success or denied -->
+<div id="admGate">
+
+<div class="adm-layout">
+
+  <!-- ── Sidebar overlay (mobile) ─────────────────────────────────────── -->
+  <div id="admSidebarOverlay" class="adm-sidebar-overlay"></div>
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+  <aside id="admSidebar" class="adm-sidebar" aria-label="Admin Navigation">
+    <div class="adm-sidebar-logo">
+      <div class="adm-sidebar-logo-icon">🛡️</div>
+      <div class="adm-sidebar-logo-text">
+        <span class="adm-sidebar-logo-title">Admin Control Center</span>
+        <span class="adm-sidebar-logo-sub">AI Travel Companion</span>
+      </div>
+    </div>
+
+    <nav class="adm-nav" role="navigation" aria-label="Admin sections">
+      <div class="adm-nav-section">Main</div>
+
+      <button class="adm-nav-item active" data-page="overview" aria-label="Overview">
+        <span class="adm-nav-icon">📊</span>
+        Overview
+      </button>
+
+      <div class="adm-nav-section">Management</div>
+
+      <button class="adm-nav-item" data-page="users" aria-label="User Management">
+        <span class="adm-nav-icon">👥</span>
+        User Management
+      </button>
+
+      <button class="adm-nav-item" data-page="itineraries" aria-label="Itineraries">
+        <span class="adm-nav-icon">🗺️</span>
+        Itineraries
+      </button>
+
+      <div class="adm-nav-section">System</div>
+
+      <button class="adm-nav-item placeholder" data-page="monitoring" title="Coming soon" aria-label="API Monitoring — placeholder">
+        <span class="adm-nav-icon">📡</span>
+        API Monitoring
+        <span class="adm-nav-badge">Soon</span>
+      </button>
+
+      <button class="adm-nav-item placeholder" data-page="health" title="Coming soon" aria-label="System Health — placeholder">
+        <span class="adm-nav-icon">❤️</span>
+        System Health
+        <span class="adm-nav-badge">Soon</span>
+      </button>
+
+      <button class="adm-nav-item placeholder" data-page="settings" title="Coming soon" aria-label="Settings — placeholder">
+        <span class="adm-nav-icon">⚙️</span>
+        Settings
+        <span class="adm-nav-badge">Soon</span>
+      </button>
+
+      <button class="adm-nav-item placeholder" data-page="feedback" title="Coming soon" aria-label="Feedback — placeholder">
+        <span class="adm-nav-icon">💬</span>
+        Feedback &amp; Diagnostics
+        <span class="adm-nav-badge">Soon</span>
+      </button>
+    </nav>
+
+    <div class="adm-sidebar-footer">
+      <a href="/" class="adm-nav-item" style="margin-bottom:4px;" aria-label="Back to main site">
+        <span class="adm-nav-icon">←</span>
+        Main Site
+      </a>
+      <button id="admLogoutBtn" class="adm-logout-btn" aria-label="Log out">
+        <span>🚪</span>
+        Log Out
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main ─────────────────────────────────────────────────────────── -->
+  <main class="adm-main" role="main">
+
+    <!-- Header -->
+    <header class="adm-header" role="banner">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <button id="admHamburger" class="adm-hamburger" aria-label="Toggle navigation">☰</button>
+        <h1 id="admPageTitle" class="adm-header-title">Overview</h1>
+      </div>
+      <div class="adm-header-right">
+        <div class="adm-admin-chip" aria-label="Admin account indicator">
+          <span class="adm-admin-chip-dot"></span>
+          <span id="admAdminName">Admin</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Overview Page ──────────────────────────────────────────────── -->
+    <section id="page-overview" class="adm-page active" aria-label="Overview">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">Overview</h2>
+        <p class="adm-page-subtitle">Real-time metrics from the Aiven PostgreSQL database.</p>
+      </div>
+      <div id="admOverviewCards" class="adm-cards" aria-live="polite">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- ── User Management Page ───────────────────────────────────────── -->
+    <section id="page-users" class="adm-page" aria-label="User Management">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">User Management</h2>
+        <p class="adm-page-subtitle" id="admUsersTotal">Loading…</p>
+      </div>
+
+      <div class="adm-table-wrap">
+        <div class="adm-table-toolbar">
+          <div class="adm-search-wrap">
+            <span class="adm-search-icon">🔍</span>
+            <input
+              id="admUsersSearch"
+              class="adm-search"
+              type="search"
+              placeholder="Search by username…"
+              aria-label="Search users by username"
+              maxlength="100"
+            >
+          </div>
+          <select id="admUsersRoleFilter" class="adm-select" aria-label="Filter by role">
+            <option value="">All roles</option>
+            <option value="admin">Admins</option>
+            <option value="user">Regular users</option>
+          </select>
+          <button id="admUsersRefresh" class="adm-refresh-btn" aria-label="Refresh user list">
+            ↻ Refresh
+          </button>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="adm-table" aria-label="Users table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Role</th>
+                <th>Registered</th>
+                <th>Last Login</th>
+                <th>Itineraries</th>
+              </tr>
+            </thead>
+            <tbody id="admUsersTbody" aria-live="polite">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="admUsersPager" class="adm-pagination" aria-label="Pagination"></div>
+      </div>
+    </section>
+
+    <!-- ── Itinerary Management Page ──────────────────────────────────── -->
+    <section id="page-itineraries" class="adm-page" aria-label="Itinerary Management">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">Itinerary Management</h2>
+        <p class="adm-page-subtitle" id="admItinTotal">Loading…</p>
+      </div>
+
+      <div class="adm-table-wrap">
+        <div class="adm-table-toolbar">
+          <div class="adm-search-wrap">
+            <span class="adm-search-icon">🔍</span>
+            <input
+              id="admItinSearch"
+              class="adm-search"
+              type="search"
+              placeholder="Search by title, owner, preview…"
+              aria-label="Search itineraries"
+              maxlength="200"
+            >
+          </div>
+          <select id="admItinTypeFilter" class="adm-select" aria-label="Filter by type">
+            <option value="">All types</option>
+            <option value="itinerary">Itinerary</option>
+            <option value="area">Area Guide</option>
+            <option value="places">Places</option>
+            <option value="cafes">Cafes</option>
+            <option value="medical">Medical</option>
+          </select>
+          <button id="admItinRefresh" class="adm-refresh-btn" aria-label="Refresh itinerary list">
+            ↻ Refresh
+          </button>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="adm-table" aria-label="Itineraries table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Owner</th>
+                <th>Preview</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="admItinTbody" aria-live="polite">
+              <!-- Filled by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="admItinPager" class="adm-pagination" aria-label="Pagination"></div>
+      </div>
+    </section>
+
+    <!-- ── Placeholder Pages ───────────────────────────────────────────── -->
+    <section id="page-monitoring" class="adm-page" aria-label="API Monitoring (placeholder)">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">API Monitoring</h2>
+        <p class="adm-page-subtitle">Track external API usage and rate limit status.</p>
+      </div>
+      <div class="adm-placeholder-box">
+        <div class="adm-placeholder-icon">📡</div>
+        <div class="adm-placeholder-title">Coming Soon</div>
+        <div class="adm-placeholder-desc">
+          API monitoring and usage charts are planned for a future release.
+          This section will show Geoapify, Gemini, SerpAPI and RailRadar call volumes.
+        </div>
+      </div>
+    </section>
+
+    <section id="page-health" class="adm-page" aria-label="System Health (placeholder)">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">System Health</h2>
+        <p class="adm-page-subtitle">Server uptime, response times and error rates.</p>
+      </div>
+      <div class="adm-placeholder-box">
+        <div class="adm-placeholder-icon">❤️</div>
+        <div class="adm-placeholder-title">Coming Soon</div>
+        <div class="adm-placeholder-desc">
+          System health metrics, request latency, and error monitoring are planned for a future release.
+        </div>
+      </div>
+    </section>
+
+    <section id="page-settings" class="adm-page" aria-label="Settings (placeholder)">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">Settings</h2>
+        <p class="adm-page-subtitle">Application configuration.</p>
+      </div>
+      <div class="adm-placeholder-box">
+        <div class="adm-placeholder-icon">⚙️</div>
+        <div class="adm-placeholder-title">Coming Soon</div>
+        <div class="adm-placeholder-desc">
+          Application settings management is planned for a future release.
+        </div>
+      </div>
+    </section>
+
+    <section id="page-feedback" class="adm-page" aria-label="Feedback & Diagnostics (placeholder)">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">Feedback &amp; Diagnostics</h2>
+        <p class="adm-page-subtitle">User feedback overview and diagnostics.</p>
+      </div>
+      <div class="adm-placeholder-box">
+        <div class="adm-placeholder-icon">💬</div>
+        <div class="adm-placeholder-title">Coming Soon</div>
+        <div class="adm-placeholder-desc">
+          A feedback analytics view and diagnostic tools are planned for a future release.
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /.adm-main -->
+</div><!-- /.adm-layout -->
+
+</div><!-- #admGate -->
+
+<!-- ── User Detail Modal ──────────────────────────────────────────────── -->
+<div id="admUserModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="User detail">
+  <div class="adm-modal">
+    <div class="adm-modal-header">
+      <span class="adm-modal-title">User Details</span>
+      <button class="adm-modal-close" onclick="admCloseUserModal()" aria-label="Close">✕</button>
+    </div>
+    <div id="admUserModalBody"></div>
+  </div>
+</div>
+
+<!-- ── Itinerary Detail Modal ─────────────────────────────────────────── -->
+<div id="admItinModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="Itinerary detail">
+  <div class="adm-modal">
+    <div class="adm-modal-header">
+      <span class="adm-modal-title">Itinerary Details</span>
+      <button class="adm-modal-close" onclick="admCloseItinModal()" aria-label="Close">✕</button>
+    </div>
+    <div id="admItinModalBody"></div>
+  </div>
+</div>
+
+<!-- ── Confirm/Danger Dialog ──────────────────────────────────────────── -->
+<div id="admConfirmModal" class="adm-modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm destructive action">
+  <div class="adm-modal" style="max-width:440px;">
+    <div class="adm-modal-header">
+      <span class="adm-modal-title" style="color:var(--adm-red);">⚠️ Confirm Action</span>
+    </div>
+    <p class="adm-confirm-text" id="admConfirmText"></p>
+    <div class="adm-modal-actions">
+      <button id="admConfirmOkBtn" class="adm-btn adm-btn-danger">Yes, delete</button>
+      <button id="admConfirmCancelBtn" class="adm-btn adm-btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast container ────────────────────────────────────────────────── -->
+<div id="admToast" class="adm-toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+<script src="/admin/admin.js"></script>
+</body>
+</html>
