@@ -72,6 +72,17 @@ So the app is honest about it:
 
 ---
 
+## 🧠 How the planner thinks
+
+- 🏨 **Fewer hotel changes.** One hotel for the whole stay in a place. A new hotel is only suggested when you move to another city, or when two or more days are spent far (about 20 km or more) from the first hotel. Hotels less than 3 km apart never trigger a "changing hotel" step.
+- 🛬 **Arrival day is planned too.** After you land, the plan allows time to leave the airport, reach the hotel and rest for 1 to 1.5 hours. Then it adds a few nearby places and dinner for the rest of the evening. The same logic applies on days when you move between cities by flight or train.
+- ✈️ **Flights between cities show flight details.** Once you pick a flight or train between two places, you see its times, duration and distance. Cab and road price estimates are shown only before you choose, or if you choose a cab.
+- 🏨 **Every day ends with the way back.** After the last stop, a step shows the hotel, an approximate time to head back, the distance and a map link from that last stop.
+- 🗺️ **Each day as a route.** A small horizontal flowchart shows the order of the day. "See on map" draws the numbered stops joined by a highlighted path.
+- 🔀 **Use other services while one is running.** While an itinerary is being generated, links to other pages open in a new tab so the running work is not lost. The server also no longer freezes during slow AI calls.
+
+---
+
 ## 🛡️ Admin Dashboard
 
 A private control centre at **`/admin/`** for the site owner. It is built into the same app (no extra server) and uses the same PostgreSQL database.
@@ -80,7 +91,7 @@ A private control centre at **`/admin/`** for the site owner. It is built into t
 |---|---|
 | 📊 **Overview** | Total users, admins, active/inactive accounts, itineraries and sign-ups in the last 7 days |
 | 👥 **Users** | Search, activate/deactivate, promote/demote admins, delete accounts (with safety guards: you can't remove yourself or the last admin) |
-| 🗺️ **Itineraries** | Search, filter by type, view and delete saved items |
+| 🗺️ **Itineraries** | Search, filter by type, and view any saved record (itinerary, places, cafés, medical, area guide) in a readable layout, with raw data one click away. Delete saved items |
 | 📈 **API Monitoring** | Request counts, error rate, response times, slowest endpoints and recent failures (last 15 minutes or 24 hours) |
 | 💚 **System Health** | App uptime, PostgreSQL connectivity and latency, and whether each external service is configured |
 | ⚙️ **Settings** | Maintenance mode, new registrations, guest mode, new reviews, and a public announcement banner |

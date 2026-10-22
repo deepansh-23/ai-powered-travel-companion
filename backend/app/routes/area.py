@@ -7,6 +7,7 @@ In live mode (MOCK_MODE=false):
 4. Returns the structured area guide
 """
 
+import asyncio
 from typing import Any, Dict, List, Optional
 from app.security import require_user_or_guest
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -27,7 +28,7 @@ async def summarize_area(req: AreaSummarizeRequest):
     if not settings.MOCK_MODE:
         # Step 1: Geocode area
         try:
-            center = geocoding_service.resolve_center(location=req.area)
+            center = await asyncio.to_thread(geocoding_service.resolve_center, location=req.area)
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

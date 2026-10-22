@@ -5,8 +5,32 @@
 
 const BASE_URL = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) || "";
 
+// Requests that are running right now. A page that is waiting for a long one (itinerary, area guide...)
+// is "busy": links to other services then open in a NEW TAB so the running work is not thrown away.
+const _inflight = new Map();
+let _inflightSeq = 0;
+const LONG_ENDPOINTS = ["/api/itinerary/generate", "/api/itinerary/finalize", "/api/area/summarize", "/api/export/"];
+
+export function hasLongRunningRequest() {
+  const now = Date.now();
+  for (const r of _inflight.values()) {
+    if (r.long || now - r.start > 1500) return true;
+  }
+  return false;
+}
+
 class ApiClient {
   async _request(endpoint, options = {}) {
+    const _id = ++_inflightSeq;
+    _inflight.set(_id, { start: Date.now(), long: LONG_ENDPOINTS.some((p) => String(endpoint).startsWith(p)) });
+    try {
+      return await this._requestInner(endpoint, options);
+    } finally {
+      _inflight.delete(_id);
+    }
+  }
+
+  async _requestInner(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
     const defaultHeaders = {
       "Content-Type": "application/json",

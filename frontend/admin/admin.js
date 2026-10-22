@@ -711,8 +711,10 @@ async function admOpenItinModal(iid) {
           <div class="adm-detail-value" style="font-family:monospace;font-size:11px;">${admEscape(item.id)}</div>
         </div>
         <div class="adm-detail-item" style="grid-column:1/-1;">
-          <div class="adm-detail-label">Payload JSON</div>
-          <div class="adm-json-wrap">${admEscape(payloadJson)}</div>
+          <div class="adm-detail-label">Details</div>
+          ${typeof admRenderRecordView === 'function' ? admRenderRecordView(item.feature_type, item.payload) : ''}
+          <button type="button" class="adm-btn adm-btn-ghost adm-raw-toggle" onclick="admToggleRaw(this)">Show raw data</button>
+          <div class="adm-json-wrap" hidden>${admEscape(payloadJson)}</div>
         </div>
       </div>
 

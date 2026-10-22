@@ -13,6 +13,7 @@ Enforces all validation rules:
 - Radius enforcement on every query
 """
 
+import asyncio
 import json
 import httpx
 from typing import List, Dict, Any, Optional, Set
@@ -348,7 +349,8 @@ class PlacesService:
             raw_list = deduplicate_places(self._places_cache)
         else:
             # Live Geoapify fetch
-            features = _fetch_geoapify_places(
+            features = await asyncio.to_thread(
+                _fetch_geoapify_places,
                 center.latitude, center.longitude,
                 radius_m, _PLACES_CATEGORIES, limit=50,
             )
@@ -411,7 +413,8 @@ class PlacesService:
                 self._cafes_cache = self._load_mock("cafes.json")
             raw_list = deduplicate_places(self._cafes_cache)
         else:
-            features = _fetch_geoapify_places(
+            features = await asyncio.to_thread(
+                _fetch_geoapify_places,
                 center.latitude, center.longitude,
                 radius_m, _CAFE_CATEGORIES, limit=50,
             )
@@ -477,7 +480,8 @@ class PlacesService:
                 self._medical_cache = self._load_mock("medical.json")
             raw_list = deduplicate_places(self._medical_cache)
         else:
-            features = _fetch_geoapify_places(
+            features = await asyncio.to_thread(
+                _fetch_geoapify_places,
                 center.latitude, center.longitude,
                 radius_m, _MEDICAL_CATEGORIES, limit=50,
             )

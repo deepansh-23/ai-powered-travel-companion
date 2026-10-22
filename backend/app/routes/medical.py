@@ -1,5 +1,6 @@
 """24/7 Medical Care search API route."""
 
+import asyncio
 from fastapi import APIRouter, HTTPException, status
 from app.models.medical import MedicalSearchRequest, MedicalSearchResponse
 from app.services.geocoding_service import geocoding_service
@@ -12,7 +13,8 @@ router = APIRouter(prefix="/api/medical", tags=["Medical"])
 async def search_medical(req: MedicalSearchRequest):
     """Search medical facilities with verified 24/7 flags and emergency disclaimers."""
     try:
-        center = geocoding_service.resolve_center(
+        center = await asyncio.to_thread(
+            geocoding_service.resolve_center,
             location=req.location,
             latitude=req.latitude,
             longitude=req.longitude,

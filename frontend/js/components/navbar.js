@@ -3,8 +3,39 @@
  */
 
 import { state } from "../state.js";
+import { hasLongRunningRequest } from "../api.js";
+import { toast } from "./toast.js";
+
+/**
+ * While something is running (e.g. an itinerary is being generated), opening another service must not
+ * kill it. Links to other pages then open in a new tab, so the first tab keeps working and the traveller
+ * can use places, history, reviews and everything else in parallel.
+ */
+function keepRunningWorkAlive() {
+  document.addEventListener("click", (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+    const href = a.getAttribute("href") || "";
+    if (!href || href.startsWith("#") || /^(mailto:|tel:|javascript:)/i.test(href)) return;
+    let url;
+    try { url = new URL(a.href, window.location.href); } catch (_) { return; }
+    if (url.origin !== window.location.origin) return;
+    if (url.pathname === window.location.pathname) return;
+    if (!hasLongRunningRequest()) return;
+    e.preventDefault();
+    window.open(url.href, "_blank", "noopener");
+    try { toast.info("Your request is still running, so this opened in a new tab. Nothing is lost."); } catch (_) { /* toast is optional */ }
+  }, true);
+
+  // Reload / closing the tab / the back button would also cancel the running request: ask first.
+  window.addEventListener("beforeunload", (e) => {
+    if (hasLongRunningRequest()) { e.preventDefault(); e.returnValue = ""; }
+  });
+}
 
 export function initNavbar() {
+  keepRunningWorkAlive();
   const currentPath = window.location.pathname.toLowerCase();
 
   // Highlight active link

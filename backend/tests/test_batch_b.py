@@ -21,7 +21,7 @@ BACK = {"mode": "flight", "operator": "Air India", "number": "AI 9", "origin": "
 # ------------------------------------------------------------------ timing rules
 def test_day_one_starts_after_landing_exit_cab_and_settling_in():
     w = day_windows(OUT, BACK, 4)
-    assert w["start"] == "12:30"      # 10:15 + 45 exit + 40 cab + 30 settle, rounded up to :30
+    assert w["start"] == "13:00"      # 10:15 + 45 exit + 40 cab = 11:40 at the hotel, + 60 min rest (before check-in), rounded up to :30
     assert w["end"] == "15:20"        # 18:30 - 2h airport buffer - 40 cab - 30 check-out
     assert day_windows(None, None, 3) == {"start": None, "end": None}
     assert day_windows({"mode": "train", "arrival_time": "garbage"}, None, 3)["start"] is None
@@ -29,10 +29,29 @@ def test_day_one_starts_after_landing_exit_cab_and_settling_in():
 
 def test_late_arrival_only_gets_a_relaxed_evening_and_prompt_forbids_journey_talk():
     late = day_windows({"mode": "flight", "arrival_time": "2099-03-10 18:10"}, None, 3)
-    lines = window_prompt_lines(late, 3)
-    assert "relaxed dinner" in lines[0]
+    assert "relaxed dinner" in window_prompt_lines(late, 3)[0]            # 18:10 landing -> only dinner is realistic
+    afternoon = window_prompt_lines(day_windows({"mode": "flight", "arrival_time": "2099-03-10 14:10"}, None, 3), 3)[0]
+    assert "relaxed dinner" not in afternoon and "START at 17:30" in afternoon and "dinner stop" in afternoon  # still a real plan
     text = " ".join(window_prompt_lines(day_windows(OUT, BACK, 4), 4))
-    assert "START at 12:30" in text and "FINISHED by 15:20" in text and "Do NOT write about the flight" in text
+    assert "START at 13:00" in text and "FINISHED by 15:20" in text and "Do NOT write about the flight" in text
+
+
+def test_arrival_day_plan_is_trimmed_to_the_free_hours_and_meals_skipped():
+    from app.models.itinerary import FoodStop, ItineraryDay, ItinerarySegment, ItineraryPlaceItem
+    from app.utils.day_timing import fit_day_to_window, parse_clock, ready_time_after_arrival
+    assert parse_clock("08:30 AM – 12:00 PM") == [510, 720] and parse_clock("5:30 PM – 10:00 PM") == [1050, 1320]
+    place = lambda n: ItineraryPlaceItem(name=n, category="x")
+    seg = lambda tw, *names: ItinerarySegment(time_window=tw, title="T", description="d", places=[place(n) for n in names])
+    food = lambda: FoodStop(name="F", cuisine="c", recommendation="r")
+    day = ItineraryDay(day_number=1, theme="t", estimated_day_cost="0", morning=seg("08:30 AM – 12:00 PM", "A"),
+                       food_stop_lunch=food(), afternoon=seg("12:30 PM – 04:30 PM", "B"), food_stop_dinner=food(),
+                       evening=seg("05:30 PM – 10:30 PM", "C"))
+    start = ready_time_after_arrival({"mode": "flight", "arrival_time": "2099-03-10 14:10"})
+    assert start == "17:30"
+    assert fit_day_to_window(day, start)
+    assert day.morning.places == [] and day.afternoon.places == []      # these hours are spent travelling and resting
+    assert [p.name for p in day.evening.places] == ["C"] and day.evening.time_window == "17:30 – 22:00"
+    assert day.food_stop_lunch.skipped and not day.food_stop_dinner.skipped
 
 
 def test_cab_time_comes_from_distance_or_a_labelled_default():

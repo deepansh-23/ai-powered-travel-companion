@@ -237,11 +237,28 @@ def enrich_itinerary(
 
     sequence: List[Any] = []
     sequence += list(day.morning.places or [])
-    sequence.append(day.food_stop_lunch)
+    if not getattr(day.food_stop_lunch, "skipped", False):
+      sequence.append(day.food_stop_lunch)
     sequence += list(day.afternoon.places or [])
-    sequence.append(day.food_stop_dinner)
+    if not getattr(day.food_stop_dinner, "skipped", False):
+      sequence.append(day.food_stop_dinner)
     sequence += list(day.evening.places or [])
 
+    day_last: Optional[_Point] = None
     for item in sequence:
       origin = attach(item, origin) if origin is not None else attach(item, None)
       last_stop = origin
+      day_last = origin
+
+    # End of the day: how to get back to the hotel from the last stop (not on the departure day)
+    day.return_to_hotel = None
+    return_hotel = day_hotel if day_hotel is not None else (hotel_point if not hotels_by_day else None)
+    is_departure_day = day.day_number == len(response.days) and len(response.days) > 1
+    if day_last is not None and return_hotel is not None and not is_departure_day:
+      try:
+        from app.utils.day_timing import return_to_hotel_card
+        leg = build_leg(day_last, return_hotel, preference)
+        hotel_info = {"name": return_hotel.name, "address": return_hotel.address}
+        day.return_to_hotel = return_to_hotel_card(day, hotel_info, leg, day_last.name)
+      except Exception:  # a bonus step: never break the itinerary
+        day.return_to_hotel = None

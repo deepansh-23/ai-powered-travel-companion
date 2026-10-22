@@ -11,8 +11,13 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 MAX_AREAS = 6
-MAX_NIGHTS_PER_HOTEL = 3
-SPLIT_DISTANCE_KM = 15.0       # days whose sights are further apart than this get a different hotel
+# Changing hotel is tiring, so the same hotel is kept for the whole stay in one place. A new hotel is only
+# suggested when the traveller moves to another place, or when a group of days is so far from the hotel that
+# a lot of time would be lost travelling back and forth (see plan_stay_blocks).
+MAX_NIGHTS_PER_HOTEL = 14
+SPLIT_DISTANCE_KM = 20.0       # sights further than this from the hotel area may justify a different hotel
+MIN_DAYS_NEW_AREA = 2          # ...but only if at least this many days are spent around the new spot
+MIN_DAYS_BEFORE_SPLIT = 2      # ...and the first hotel has been used for at least this many days
 ROAD_FACTOR = 1.3              # straight line -> typical road distance
 ROAD_SPEED_KMH = 50.0
 COST_PER_KM_PER_PERSON = 3.5   # INR, mixed bus/train/shared cab: an ESTIMATE, always labelled as one
@@ -107,19 +112,42 @@ def plan_stay_blocks(
     """Groups consecutive days into hotel stays.
 
     days: [{'day_number': 1, 'area': 'Jaipur', 'points': [(lat, lon), ...], 'places': ['Amber Fort', ...]}]
-    A new stay starts when the area changes, when a stay would exceed `max_nights`, or when the next
-    day's sights are further than `split_km` from where the stay began. The last day is the departure
-    day, so the final stay has one night fewer than its days.
+
+    A new stay starts ONLY when
+      * the area (city) changes, or
+      * a run of at least MIN_DAYS_NEW_AREA days is spent more than `split_km` away from the hotel area
+        (so the traveller can see one cluster of places from one hotel and the next cluster from another), or
+      * the stay would exceed `max_nights` (a safety cap).
+    A single far-away day does NOT trigger a hotel change: it is a day trip. Two hotels in the same
+    neighbourhood are never suggested. The last day is the departure day, so the final stay has one
+    night fewer than its days.
     """
+    def _pts(d: Dict[str, Any]) -> List[Tuple[float, float]]:
+        return [tuple(p) for p in (d.get("points") or []) if p and p[0] is not None and p[1] is not None]
+
+    def _far_cluster_days(i: int, area: str, ref: Tuple[float, float]) -> int:
+        """How many consecutive days from day index i stay around the same far-away spot (same area)."""
+        c0 = _centroid(_pts(days[i]))
+        n = 0
+        for d in days[i:]:
+            if (d.get("area") or "").strip().lower() != area.lower():
+                break
+            c = _centroid(_pts(d))
+            if not c or not c0 or haversine_km(c0, c) > split_km or haversine_km(ref, c) <= split_km:
+                break
+            n += 1
+        return n
+
     runs: List[Dict[str, Any]] = []
-    for d in days:
-        pts = [tuple(p) for p in (d.get("points") or []) if p and p[0] is not None and p[1] is not None]
+    for i, d in enumerate(days):
+        pts = _pts(d)
         area = (d.get("area") or "").strip()
         cur = runs[-1] if runs else None
         start_new = cur is None or area.lower() != cur["area"].lower() or len(cur["days"]) >= max_nights
-        if not start_new and cur["first_point"] and pts:
+        if not start_new and pts and len(cur["days"]) >= MIN_DAYS_BEFORE_SPLIT:
+            ref = cur["first_point"]      # where the traveller started the stay (a day trip must not shift it)
             c = _centroid(pts)
-            if c and haversine_km(cur["first_point"], c) > split_km:
+            if ref and c and haversine_km(ref, c) > split_km and _far_cluster_days(i, area, ref) >= MIN_DAYS_NEW_AREA:
                 start_new = True
         if start_new:
             runs.append({"area": area, "days": [], "points": [], "places": [], "first_point": _centroid(pts)})
@@ -170,6 +198,7 @@ def block_transfers(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         out.append({
             "from_area": a["area"], "to_area": b["area"], "from_stay": a["index"], "to_stay": b["index"],
             "distance_km": int(round(km)),
+            "air_km": int(round(km / ROAD_FACTOR)),   # straight line: the distance a flight covers
             "hours": round(km / ROAD_SPEED_KMH, 1),
             "cost_per_person": int(round(km * COST_PER_KM_PER_PERSON)),
             "note": ("Long transfer: check trains or a short flight." if km > 400

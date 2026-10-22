@@ -31,8 +31,15 @@ def test_stay_blocks_split_by_area_nights_and_distance():
     assert blocks[0]["check_in"] == "2099-03-10" and blocks[1]["check_in"] == blocks[0]["check_out"]
     assert block_transfers(blocks)[0]["distance_km"] > 150
 
+    # one city, all sights close together: ONE hotel for the whole stay (no pointless hotel change)
     long_stay = [{"day_number": i, "area": "Rome", "points": [(41.9, 12.5)]} for i in range(1, 6)]
-    assert [b["nights"] for b in plan_stay_blocks(long_stay)] == [3, 1]
+    assert [b["nights"] for b in plan_stay_blocks(long_stay)] == [4]
+    # a single far-away day is a day trip, not a reason to change hotel
+    one_far = [{"day_number": i, "area": "Rome", "points": [(41.9, 12.5) if i != 3 else (42.6, 12.9)]} for i in range(1, 6)]
+    assert [b["nights"] for b in plan_stay_blocks(one_far)] == [4]
+    # two days in a far-away part of the same region: moving hotel saves time, so a second stay is suggested
+    split = [{"day_number": i, "area": "Rome", "points": [(41.9, 12.5) if i <= 3 else (42.6, 12.9)]} for i in range(1, 6)]
+    assert [b["nights"] for b in plan_stay_blocks(split)] == [3, 1]
     assert plan_stay_blocks([{"day_number": 1, "area": "Goa"}])[0]["needs_hotel"] is False
 
 

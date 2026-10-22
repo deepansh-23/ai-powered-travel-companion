@@ -1,3 +1,4 @@
+import asyncio
 import re
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Response
@@ -21,7 +22,7 @@ class ExportAudioRequest(BaseModel):
 async def export_pdf(req: ExportPDFRequest):
     """Generate and return actual binary PDF (Section 23)."""
     try:
-        pdf_bytes = pdf_service.generate_itinerary_pdf_bytes(req.title, req.content)
+        pdf_bytes = await asyncio.to_thread(pdf_service.generate_itinerary_pdf_bytes, req.title, req.content)
         safe_filename = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', req.title or "Itinerary")[:50]
         if not safe_filename.endswith(".pdf"):
             safe_filename += ".pdf"
@@ -42,4 +43,4 @@ async def export_pdf(req: ExportPDFRequest):
 @router.post("/audio")
 async def export_audio(req: ExportAudioRequest):
     """Generate audio TTS synthesis payload."""
-    return tts_service.synthesize_audio_payload(req.text)
+    return await asyncio.to_thread(tts_service.synthesize_audio_payload, req.text)

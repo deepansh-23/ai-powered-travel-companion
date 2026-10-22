@@ -254,3 +254,40 @@ assert(venice.includes('scope-arrival-chip active" data-city="Venice"') && !veni
 const noDefault = x.buildScopePanelHtml({ ...italy, default_arrival: null, arrival_options: [], source: "basic", suggestions: [] }, { mode: "", selected: [], arrival: "" }, { days: 10 });
 assert(noDefault.includes('id="scopeArrival"') && !noDefault.includes("scope-arrival-chip") && !noDefault.includes("We suggest"));
 console.log("plan-your-area start city: all assertions passed");
+
+// ---------------------------------------------------------------- day route, return to hotel, flight details
+{
+  const { buildDayStops, buildDayFlowHtml } = await import("../js/components/day-route.js");
+  const { buildReturnToHotelHtml, buildTransfersHtml, buildFlightDetailHtml } = await import("../js/pages/itinerary-extras.js");
+  const place = (name, lat, lon) => ({ name, latitude: lat, longitude: lon });
+  const day = {
+    day_number: 1,
+    morning: { places: [place("Colosseum", 41.89, 12.49)] },
+    food_stop_lunch: { name: "Trattoria", latitude: 41.9, longitude: 12.5 },
+    afternoon: { places: [place("Forum", 41.892, 12.485)] },
+    food_stop_dinner: { name: "Pizzeria", skipped: true },
+    evening: { places: [place("Trevi", 41.9, 12.48)] },
+    return_to_hotel: { hotel_name: "Hotel Hiberia" },
+  };
+  const stops = buildDayStops(day, { name: "Hotel Hiberia", latitude: 41.91, longitude: 12.5 });
+  assert.deepEqual(stops.map((s) => s.name), ["Hotel Hiberia", "Colosseum", "Trattoria", "Forum", "Trevi", "Hotel Hiberia"]);
+  assert.deepEqual(stops.map((s) => s.num), [0, 1, 2, 3, 4, 5]);           // visiting order, skipped dinner left out
+  assert.ok(buildDayFlowHtml(stops).includes("dayflow") && buildDayFlowHtml(stops).includes("Trevi"));
+  assert.equal(buildDayFlowHtml([stops[0]]), "");
+
+  const rt = { hotel_name: "Hotel Hiberia", hotel_address: "Via X", from_name: "Trevi", text: "After Trevi, head back.", leave_at: "21:30",
+    arrive_at: "21:45", directions: { distance_km: 2.1, walk_minutes: 28, drive_minutes: 12, maps_url: "https://maps.example/x?a=1&b=2" } };
+  const rtHtml = buildReturnToHotelHtml(rt);
+  assert.ok(rtHtml.includes("Back to your hotel") && rtHtml.includes("21:30") && rtHtml.includes("https://maps.example/x?a=1&amp;b=2"));
+  assert.equal(buildReturnToHotelHtml(null), "");
+
+  // after a flight is chosen: flight details (time, distance), never the cab / road price estimate
+  const transfers = [{ from_area: "Rome", to_area: "Florence", to_stay: 1, distance_km: 360, air_km: 277, hours: 7.2, cost_per_person: 1260, note: "Road/rail estimate" }];
+  const choice = { 1: { mode: "flight", option: { operator: "ITA", number: "AZ1", departure_time: "2099-03-12 09:00", arrival_time: "2099-03-12 10:05", duration_formatted: "1h 5m", price: 5200 } } };
+  const chosen = buildTransfersHtml(transfers, choice);
+  assert.ok(chosen.includes("09:00") && chosen.includes("10:05") && chosen.includes("277") && chosen.includes("ITA"));
+  assert.ok(!chosen.includes("by road") && !chosen.includes("per person)") && !chosen.includes("1,260"));
+  assert.ok(buildTransfersHtml(transfers).includes("by road"));             // nothing chosen yet: the road estimate is still shown
+  assert.ok(buildFlightDetailHtml(null) === "");
+  console.log("day route / return to hotel / flight details: all assertions passed");
+}

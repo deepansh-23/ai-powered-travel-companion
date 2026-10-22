@@ -169,6 +169,15 @@ export function quickRows(day) {
   segment("Afternoon", day.afternoon);
   meal("Dinner", day.food_stop_dinner);
   segment("Evening", day.evening);
+  const rt = day.return_to_hotel;
+  if (rt && rt.hotel_name) {
+    const d = rt.directions || {};
+    rows.push({
+      when: "Night", kind: "hotel", name: `Back to ${rt.hotel_name}`,
+      detail: [rt.leave_at ? `around ${rt.leave_at}` : "", d.distance_km != null ? `~${d.distance_km} km` : ""].filter(Boolean).join(" | "),
+      url: d.maps_url || null
+    });
+  }
   return rows;
 }
 
@@ -381,14 +390,21 @@ export function buildStayBlockHtml(block, choice, inboundLine = "") {
     </section>`;
 }
 
-export function buildTransfersHtml(transfers) {
+export function buildTransfersHtml(transfers, choices = {}) {
   if (!transfers || !transfers.length) return "";
-  const rows = transfers.map((t) => t.choice && t.choice.mode !== "cab" ? `
-    <li><b>${escapeHtml(t.from_area)} → ${escapeHtml(t.to_area)}</b>: about ${t.distance_km} km<br>
-      ${buildTransferSummaryLine({ mode: t.choice.mode, option: t.choice })}</li>` : `
-    <li><b>${escapeHtml(t.from_area)} → ${escapeHtml(t.to_area)}</b>: about ${t.distance_km} km, ~${t.hours} h by road${t.choice ? " (cab)" : ""}
+  const rows = transfers.map((t) => {
+    // the traveller's pick: either saved on the transfer (finished itinerary) or still in the planner (hotel step)
+    const picked = t.choice ? { mode: t.choice.mode, option: t.choice } : choices[t.to_stay];
+    const head = `<b>${escapeHtml(t.from_area)} → ${escapeHtml(t.to_area)}</b>`;
+    if (picked && (picked.mode === "flight" || picked.mode === "train")) {
+      // flight / train details only: times, duration, distance. No cab or road price estimate here.
+      return `<li>${head}${buildFlightDetailHtml(picked, t)}</li>`;
+    }
+    if (picked && picked.mode === "other") return `<li>${head}<br>🚌 Bus, ferry or other (you arrange it) · about ${t.distance_km} km</li>`;
+    return `<li>${head}: about ${t.distance_km} km, ~${t.hours} h by road${picked ? " (cab)" : ""}
       <span class="stay-est">(estimate, around ${money(t.cost_per_person)} per person)</span>
-      <div class="stay-est">${escapeHtml(t.note)}</div></li>`).join("");
+      <div class="stay-est">${escapeHtml(t.note)}</div></li>`;
+  }).join("");
   return `<div class="stay-transfers"><b>Travel between your stays</b><ul>${rows}</ul></div>`;
 }
 
@@ -403,7 +419,7 @@ export function buildStaysSummaryHtml(data) {
     const link = h && h.booking_url ? ` <a href="${escapeHtml(h.booking_url)}" target="_blank" rel="noopener noreferrer">Book ↗</a>` : "";
     const prev = rowsPrevHotel;
     const hop = h && prev ? hotelHop(prev, h) : null;
-    const hopLine = h && prev
+    const hopLine = h && prev && !(hop && hop.km < 3)
       ? `<div class="hotel-hop">🔁 Changing hotel from ${escapeHtml(prev.name)}: ${hop ? `about ${hop.km} km, roughly ${hop.minutes} min by cab (estimate)` : "distance not available"}</div>`
       : "";
     if (h) rowsPrevHotel = h;
@@ -475,6 +491,43 @@ export function buildHotelConnectorHtml(from, to) {
 }
 
 const NOTE_ICONS = { arrival: "🛬", hotel_change: "🔁", departure: "🧳" };
+
+/** End of the day: "after your last stop, go back to the hotel" with a map link and an approximate time. */
+export function buildReturnToHotelHtml(rt) {
+  if (!rt || !rt.hotel_name) return "";
+  const d = rt.directions || {};
+  const chips = [
+    rt.leave_at ? `<span class="badge badge-primary">🕘 Head back around ${escapeHtml(rt.leave_at)}</span>` : "",
+    d.distance_km != null ? `<span class="badge badge-secondary">📏 ~${escapeHtml(d.distance_km)} km</span>` : "",
+    d.walk_minutes != null ? `<span class="badge badge-secondary">🚶 ~${escapeHtml(d.walk_minutes)} min walk</span>` : "",
+    d.drive_minutes != null ? `<span class="badge badge-secondary">🚗 ~${escapeHtml(d.drive_minutes)} min by car/auto</span>` : "",
+    rt.arrive_at ? `<span class="badge badge-secondary">🏨 At the hotel around ${escapeHtml(rt.arrive_at)}</span>` : "",
+  ].filter(Boolean).join(" ");
+  const link = d.maps_url
+    ? `<a href="${escapeHtml(d.maps_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm stop-directions-link">🗺️ Open map: ${escapeHtml(rt.from_name || "last stop")} → ${escapeHtml(rt.hotel_name)} ↗</a>`
+    : "";
+  return `
+    <section class="day-return" aria-label="Back to the hotel">
+      <div class="day-return-title">🏨 Back to your hotel</div>
+      <p class="segment-description">${escapeHtml(rt.text || "")}</p>
+      ${rt.hotel_address ? `<div class="stop-address">📮 ${escapeHtml(rt.hotel_address)}</div>` : ""}
+      <div class="stop-directions-chips">${chips}</div>
+      ${link}
+      <div class="stop-directions-note">Distance and time are estimates; open the map for exact directions.</div>
+    </section>`;
+}
+
+/** Flight details after a flight was chosen between two places (times and distance, no cab prices). */
+export function buildFlightDetailHtml(choice, transfer) {
+  if (!choice) return "";
+  const o = choice.option || choice;
+  const when = clock(o.departure_time) ? `${clock(o.departure_time)} → ${clock(o.arrival_time)}` : "";
+  const dur = o.duration_formatted ? ` · ${escapeHtml(o.duration_formatted)} in the air` : "";
+  const km = transfer && (transfer.air_km || transfer.distance_km)
+    ? ` · about ${escapeHtml(transfer.air_km || transfer.distance_km)} km${transfer.air_km ? " by air" : ""}` : "";
+  const route = o.origin || o.destination ? `${escapeHtml(o.origin || "")} → ${escapeHtml(o.destination || "")}` : "";
+  return `<div class="flight-detail">${buildTransferSummaryLine(choice)}${route ? `<br><small>${route}</small>` : ""}${when || dur || km ? `<br><small>${escapeHtml(when)}${dur}${km}</small>` : ""}</div>`;
+}
 
 /** Arrival / hotel change / departure cards for one day. `types` picks which kinds to show. */
 export function buildDayNotesHtml(notes, types) {

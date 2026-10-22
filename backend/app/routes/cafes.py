@@ -1,5 +1,6 @@
 """Quiet Work Cafes search API route."""
 
+import asyncio
 from fastapi import APIRouter, HTTPException, status
 from app.models.cafes import CafesSearchRequest, CafesSearchResponse
 from app.services.geocoding_service import geocoding_service
@@ -12,7 +13,8 @@ router = APIRouter(prefix="/api/cafes", tags=["Cafes"])
 async def search_cafes(req: CafesSearchRequest):
     """Search work-friendly cafes near location with amenity filters."""
     try:
-        center = geocoding_service.resolve_center(
+        center = await asyncio.to_thread(
+            geocoding_service.resolve_center,
             location=req.location,
             latitude=req.latitude,
             longitude=req.longitude,

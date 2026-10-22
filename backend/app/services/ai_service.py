@@ -5,6 +5,7 @@ MOCK_MODE=false → calls Gemini API to generate real, highly detailed itinerari
                   and area guides using verified places supplied by the backend.
 """
 
+import asyncio
 import json
 import re
 from typing import Any, Dict, List, Optional
@@ -483,7 +484,7 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
   "disclaimer": "All costs are estimates. Verify opening hours locally."
 }}"""
 
-    raw_text = self._generate_with_fallback(prompt)
+    raw_text = await asyncio.to_thread(self._generate_with_fallback, prompt)
     cleaned_text = re.sub(
         r"^```(?:json)?\s*|\s*```$", "", raw_text, flags=re.MULTILINE
     ).strip()
@@ -761,7 +762,7 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
   "source": "Geoapify Places API & Google Gemini AI"
 }}"""
 
-    raw_text = self._generate_with_fallback(prompt)
+    raw_text = await asyncio.to_thread(self._generate_with_fallback, prompt)
     cleaned_text = re.sub(
         r"^```(?:json)?\s*|\s*```$", "", raw_text, flags=re.MULTILINE
     ).strip()

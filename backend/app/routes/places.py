@@ -1,5 +1,6 @@
 """Places search API route."""
 
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.places import PlacesSearchRequest, PlacesSearchResponse
 from app.security import require_user_or_guest
@@ -21,7 +22,8 @@ async def suggest_places(q: str = ""):
 async def search_places(req: PlacesSearchRequest):
     """Search places near a center or typed location."""
     try:
-        center = geocoding_service.resolve_center(
+        center = await asyncio.to_thread(
+            geocoding_service.resolve_center,
             location=req.location,
             latitude=req.latitude,
             longitude=req.longitude,

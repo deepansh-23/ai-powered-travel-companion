@@ -87,6 +87,7 @@ class FoodStop(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     directions: Optional[Dict[str, Any]] = None
+    skipped: bool = Field(False, description="True when this meal does not fit the day (arrival / departure)")
 
 
 class ItineraryDay(BaseModel):
@@ -100,6 +101,7 @@ class ItineraryDay(BaseModel):
     evening: ItinerarySegment
     area: Optional[str] = Field(None, description="Where this day is spent (multi-area trips)")
     notes: List[Dict[str, Any]] = Field(default_factory=list, description="Arrival, departure and hotel-change cards")
+    return_to_hotel: Optional[Dict[str, Any]] = Field(None, description="End-of-day step: back to the hotel from the last stop")
 
 
 class ItineraryResponse(BaseModel):

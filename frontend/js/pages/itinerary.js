@@ -32,7 +32,9 @@ import {
   scoreHotels,
   buildMatchChipsHtml,
   buildHotelConnectorHtml,
+  hotelHop,
   buildDayNotesHtml,
+  buildReturnToHotelHtml,
   buildFlightSiteLinksHtml,
   placeAboutHtml,
   recommendedAreas,
@@ -42,6 +44,7 @@ import {
   dayColor
 } from "./itinerary-extras.js";
 import { renderTripMap } from "../components/trip-map.js";
+import { buildDayStops, buildDayFlowHtml, renderDayMap } from "../components/day-route.js";
 import { attachPlaceAutocomplete } from "../components/place-autocomplete.js";
 
 const DEFAULT_CUISINES = [
@@ -1000,7 +1003,7 @@ class ItineraryPlannerController {
 
     if (notices) {
       const msgs = (sk.notices || []).map(n => `<div class="date-strip-notice">ℹ️ ${escapeHtml(n)}</div>`).join("");
-      notices.innerHTML = msgs + buildTransfersHtml(sk.transfers);
+      notices.innerHTML = msgs + buildTransfersHtml(sk.transfers, this.transferChoices);
     }
 
     container.innerHTML = "";
@@ -1014,7 +1017,8 @@ class ItineraryPlannerController {
     let previousHotel = null; // the hotel of the stay before, so a change of hotel is shown clearly
     (sk.stay_blocks || []).forEach(b => {
       const chosenHere = this.stayChoices[b.index];
-      if (b.needs_hotel && chosenHere && previousHotel && chosenHere.name !== previousHotel.name) {
+      const hopInfo = (chosenHere && previousHotel) ? hotelHop(previousHotel, chosenHere) : null;
+      if (b.needs_hotel && chosenHere && previousHotel && chosenHere.name !== previousHotel.name && !(hopInfo && hopInfo.km < 3)) {
         const hop = document.createElement("div");
         hop.innerHTML = buildHotelConnectorHtml(previousHotel, chosenHere);
         container.appendChild(hop.firstElementChild);
@@ -1820,6 +1824,7 @@ class ItineraryPlannerController {
 
       const renderFood = (title, f) => {
         if (!f) return "";
+        if (f.skipped) return `<div class="day-meal-skipped">🍴 ${title} is skipped today: your travel time covers it, so eat on the way.</div>`;
         return `
           <section class="itinerary-segment">
             <div class="stop-card restaurant">
@@ -1841,12 +1846,15 @@ class ItineraryPlannerController {
 
       dayEl.style.setProperty("--day-color", dayColor(day.day_number));
       const highlights = dayHighlights(day);
+      const dayStops = buildDayStops(day, dayHotel);
       dayEl.innerHTML = `
         <div class="day-card-header">
           <h3 class="day-card-title">Day ${day.day_number}${day.area ? " · " + escapeHtml(day.area) : ""}: ${escapeHtml(day.theme)}</h3>
           <span class="badge badge-primary">${escapeHtml(day.estimated_day_cost)}</span>
         </div>
         ${highlights.length ? `<div class="day-highlights">✨ Today: ${highlights.map(h => `<span>${escapeHtml(h)}</span>`).join("")}</div>` : ""}
+        ${buildDayFlowHtml(dayStops)}
+        ${dayStops.some(s => s.lat != null) ? `<button type="button" class="btn btn-secondary btn-sm day-map-toggle" aria-expanded="false">🗺️ See on map</button><div class="day-map-box" hidden></div>` : ""}
         ${buildDayNotesHtml(day.notes, ["arrival", "hotel_change"])}
         ${startLabel ? `<div class="day-start-point">${startLabel}<div class="stop-meta">Each stop shows how long it takes to get there from the one before. The first stop is measured from here.</div></div>` : ""}
         ${renderSegment("🌅 Morning", day.morning)}
@@ -1854,8 +1862,25 @@ class ItineraryPlannerController {
         ${renderSegment("☀️ Afternoon", day.afternoon)}
         ${renderFood("Dinner", day.food_stop_dinner)}
         ${renderSegment("🌙 Evening", day.evening)}
+        ${buildReturnToHotelHtml(day.return_to_hotel)}
         ${buildDayNotesHtml(day.notes, ["departure"])}
       `;
+
+      // "See on map": numbered stops joined by a highlighted path, drawn only when asked for
+      const mapBtn = dayEl.querySelector(".day-map-toggle");
+      if (mapBtn) {
+        const box = dayEl.querySelector(".day-map-box");
+        let drawn = null;
+        mapBtn.addEventListener("click", () => {
+          const open = box.hidden;
+          box.hidden = !open;
+          mapBtn.setAttribute("aria-expanded", String(open));
+          mapBtn.textContent = open ? "🗺️ Hide map" : "🗺️ See on map";
+          if (open && !drawn) drawn = renderDayMap(box, dayStops, dayColor(day.day_number)) || "none";
+          if (open && drawn === "none") box.innerHTML = '<div class="stop-directions-note">The map could not be drawn for this day.</div>';
+          if (open && drawn && drawn !== "none") setTimeout(() => drawn.resize(), 50);
+        });
+      }
 
       daysContainer.appendChild(dayEl);
     });

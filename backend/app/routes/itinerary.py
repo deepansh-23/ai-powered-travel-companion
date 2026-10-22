@@ -33,7 +33,8 @@ from app.services.directions_service import enrich_itinerary
 from app.services.scope_service import scope_service
 from app.utils.budget import build_budget
 from app.utils.day_timing import (
-    arrival_card, cab_estimate, departure_card, hotel_change_card, transfer_card, _short_place,
+    arrival_card, cab_estimate, day_windows, departure_card, fit_day_to_window, hotel_change_card,
+    ready_time_after_arrival, transfer_card, _short_place,
 )
 from app.utils.trip_planner import allocate_days, block_transfers, plan_stay_blocks, transfer_needs_choice
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -42,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/itinerary", tags=["Itinerary"])
 
+
+MIN_HOTEL_CHANGE_KM = 3.0   # closer than this, changing hotel is pointless
 
 _JUNK_NAMES = ("unnamed place", "unknown", "unnamed road", "n/a", "null")
 
@@ -149,14 +152,14 @@ async def generate_itinerary(req: ItineraryRequest):
     if not multi:
       # --- single area (unchanged behaviour) ---
       try:
-        center = geocoding_service.resolve_center(location=req.destination)
+        center = await asyncio.to_thread(geocoding_service.resolve_center, location=req.destination)
       except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
       except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
       try:
-        features = _fetch_places_with_nightlife(
-            center.latitude, center.longitude, int(req.radius_km * 1000), 40)
+        features = await asyncio.to_thread(
+            _fetch_places_with_nightlife, center.latitude, center.longitude, int(req.radius_km * 1000), 40)
         verified_places = _to_verified(features)
       except Exception as exc:
         logger.warning(f"Failed to fetch Geoapify places: {exc}")
@@ -199,6 +202,14 @@ async def generate_itinerary(req: ItineraryRequest):
 
   try:
     response = await ai_service.generate_itinerary(req, verified_places=verified_places)
+    # Day 1 must respect the real arrival time even if the AI wrote earlier slots
+    try:
+      ob = req.selected_outbound_transport if isinstance(req.selected_outbound_transport, dict) else None
+      if ob and response.days:
+        fit_day_to_window(response.days[0], ready_time_after_arrival(ob))
+    except Exception as exc:
+      logger.info(f"Could not fit day 1 to the arrival time: {exc}")
+
     try:
       enrich_itinerary(response, req, verified_places)
     except Exception as exc:  # directions are a bonus: never fail the itinerary
@@ -283,7 +294,10 @@ async def _build_day_notes(it: ItineraryResponse, hotels_by_day: Dict[int, Dict[
       # moving by plane or train: checkout, journey, arrival and check-in with the real times
       day.notes.append(transfer_card(choice["option"], prev_area, b["area"], prev_hotel, hotel))
     elif b.get("needs_hotel") and hotel and prev_hotel and hotel.get("name") != prev_hotel.get("name") and day:
-      day.notes.append(hotel_change_card(prev_hotel, hotel, cab_estimate(_hotel_xy(prev_hotel), _hotel_xy(hotel))))
+      hop = cab_estimate(_hotel_xy(prev_hotel), _hotel_xy(hotel))
+      # Two hotels a short hop apart are not worth a change: no "changing hotel" card for them
+      if not (hop.get("known") and (hop.get("km") or 0) < MIN_HOTEL_CHANGE_KM):
+        day.notes.append(hotel_change_card(prev_hotel, hotel, hop))
     if b.get("needs_hotel") and hotel:
       prev_hotel = hotel
     if b.get("area"):
@@ -292,6 +306,33 @@ async def _build_day_notes(it: ItineraryResponse, hotels_by_day: Dict[int, Dict[
     hotel = hotels_by_day.get(last.day_number) or hotels_by_day.get(last.day_number - 1)
     cab = cab_estimate(await _terminal_xy(ib, "leave"), _hotel_xy(hotel))
     last.notes.append(departure_card(ib, hotel, cab, getattr(it, "source", "") or "", landing))
+
+
+async def _fit_days_to_journeys(it: ItineraryResponse, hotels_by_day: Dict[int, Dict[str, Any]],
+                                choices: Dict[int, Dict[str, Any]]) -> None:
+  """Day 1 starts after the arrival and settling in; a day on which the traveller moves to another place
+  starts after that journey; the last day ends in time for the way home. Real times only: when a journey
+  has no clock times, nothing is changed."""
+  if not it.days:
+    return
+  ob = it.selected_outbound_transport if isinstance(it.selected_outbound_transport, dict) else None
+  ib = it.selected_return_transport if isinstance(it.selected_return_transport, dict) else None
+  first, last = it.days[0], it.days[-1]
+  if ob:
+    cab = cab_estimate(await _terminal_xy(ob, "arrive"), _hotel_xy(hotels_by_day.get(first.day_number)))
+    fit_day_to_window(first, ready_time_after_arrival(ob, cab["minutes"]))
+  for b in it.stay_blocks:
+    choice = choices.get(b.get("index"))
+    day = next((d for d in it.days if d.day_number == b.get("start_day")), None)
+    if day is None or day is first or not choice or choice["mode"] not in ("flight", "train"):
+      continue
+    start = ready_time_after_arrival(choice["option"])
+    if start:
+      fit_day_to_window(day, start)
+  if ib and len(it.days) > 1:
+    cab = cab_estimate(await _terminal_xy(ib, "leave"), _hotel_xy(hotels_by_day.get(last.day_number) or hotels_by_day.get(last.day_number - 1)))
+    end = day_windows(None, ib, len(it.days), last_cab_min=cab["minutes"])["end"]
+    fit_day_to_window(last, None, end)
 
 
 @router.post("/finalize", response_model=ItineraryResponse, dependencies=[Depends(require_user)])
@@ -321,6 +362,12 @@ async def finalize_itinerary(req: FinalizeRequest):
 
   it.selected_hotels = chosen or None
   it.selected_hotel = chosen[0] if chosen else None
+
+  # Days that start or end with a flight / train only keep the hours the traveller is really free
+  try:
+    await _fit_days_to_journeys(it, hotels_by_day, _choice_by_stay(req))
+  except Exception as exc:
+    logger.warning(f"Could not fit days to the journey times: {exc}")
 
   try:
     ctx = SimpleNamespace(transportation=req.transportation, transport_modes=req.transport_modes, selected_hotel=None,
