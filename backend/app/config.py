@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     GEOAPIFY_API_KEY: Optional[str] = None   # for geocoding + places
     GEMINI_API_KEY: Optional[str] = None     # for AI itinerary / area guide
     SERPAPI_API_KEY: Optional[str] = None    # for Google Flights & Google Hotels
+    SERP_API_KEY2: Optional[str] = None      # backup SerpApi key, used automatically when the first is out of searches
     RAILRADAR_API_KEY: Optional[str] = None  # for RailRadar train searches
     RECAPTCHA_SITE_KEY: Optional[str] = None # public site key for frontend reCAPTCHA
     RECAPTCHA_SECRET_KEY: Optional[str] = None # private secret key for server verification
@@ -100,6 +101,7 @@ class Settings(BaseSettings):
         "GEOAPIFY_API_KEY",
         "GEMINI_API_KEY",
         "SERPAPI_API_KEY",
+        "SERP_API_KEY2",
         "RAILRADAR_API_KEY",
         "RECAPTCHA_SITE_KEY",
         "RECAPTCHA_SECRET_KEY",

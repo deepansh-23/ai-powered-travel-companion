@@ -13,6 +13,7 @@ import { initSavedSessions, forgetDraft } from "../components/saved-sessions.js"
 import {
   stationOptionsHtml,
   buildDateStripHtml,
+  buildDateStripPromptHtml,
   buildFareAvailabilityHtml,
   buildTrainAdviceHtml,
   buildQuickVersionHtml,
@@ -362,7 +363,7 @@ class ItineraryPlannerController {
 
     // Nearby dates (flight prices, green/orange/red) above the options of this leg
     if (this.dateStrips[legType]) this.renderDateStrip(legType);
-    else if (fetchStrip) this.loadDateStrip(legType);
+    else if (fetchStrip) this.showDateStripPrompt(legType);   // prices for nearby dates cost extra searches: only on request
 
     const allOptions = [...(legData.flights || []), ...(legData.trains || [])];
 
@@ -620,6 +621,16 @@ class ItineraryPlannerController {
       list.parentElement.insertBefore(el, list);
     }
     return el;
+  }
+
+  showDateStripPrompt(legType) {
+    const el = this.ensureStripEl(legType);
+    if (!el) return;
+    if (!this.legDate(legType)) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = buildDateStripPromptHtml();
+    const btn = el.querySelector(".date-strip-load");
+    if (btn) btn.addEventListener("click", () => this.loadDateStrip(legType), { once: true });
   }
 
   async loadDateStrip(legType) {

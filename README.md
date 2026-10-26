@@ -192,6 +192,7 @@ Without keys the app runs in **demo mode** with sample data. For real results, c
 | `GEOAPIFY_API_KEY` | Places, cafés, medical search and maps |
 | `GEMINI_API_KEY` | The AI that writes itineraries, area guides and train advice |
 | `SERPAPI_API_KEY` | Real flight and hotel prices |
+| `SERP_API_KEY2` | Optional backup SerpApi key. Used automatically when the first key is out of searches or rejected |
 | `RAILRADAR_API_KEY` | Trains, stations and classes |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSL_CA` | PostgreSQL (Aiven) for accounts, history, reviews and settings |
 | `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | The "I'm not a robot" check (also used on admin login) |

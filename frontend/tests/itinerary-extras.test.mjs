@@ -291,3 +291,11 @@ console.log("plan-your-area start city: all assertions passed");
   assert.ok(buildFlightDetailHtml(null) === "");
   console.log("day route / return to hotel / flight details: all assertions passed");
 }
+
+// ---------------------------------------------------------------- nearby dates are offered, not fetched automatically
+{
+  const { buildDateStripPromptHtml } = await import("../js/pages/itinerary-extras.js");
+  const html = buildDateStripPromptHtml();
+  assert.ok(html.includes("date-strip-load") && html.includes("Compare prices for nearby dates") && html.includes("only when you ask"));
+  console.log("nearby-date prompt: all assertions passed");
+}

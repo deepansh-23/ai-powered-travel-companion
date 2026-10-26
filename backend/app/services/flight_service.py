@@ -438,8 +438,9 @@ class FlightService:
           ),
       )
 
-    # Search every airport pair (capped to protect SerpApi credits) and merge.
-    pairs = [(d, a) for d in origin_airports for a in dest_airports if d != a][:4]
+    # ONE search per leg, using the best-matching airport pair (the first airport that the existing selection
+    # logic returns for each city). Other airports are never searched automatically, to save SerpApi credits.
+    pairs = [(d, a) for d in origin_airports for a in dest_airports if d != a][:1]
     if not pairs:
       return [], f"Origin and destination resolve to the same airport ({origin_city})."
 

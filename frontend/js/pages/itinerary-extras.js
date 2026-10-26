@@ -39,6 +39,15 @@ const TIER_TEXT = { low: "Cheaper", medium: "Average", high: "Expensive", unknow
  * @param resp      response of /api/transport/flight-dates
  * @param isDisabled (isoDate) => boolean   dates that make no sense (e.g. outbound after the return date)
  */
+export function buildDateStripPromptHtml() {
+  return `
+    <div class="date-strip-head">
+      <strong>Nearby dates</strong>
+      <button type="button" class="btn btn-secondary btn-sm date-strip-load">💲 Compare prices for nearby dates</button>
+    </div>
+    <div class="date-strip-note">Flights are searched only for your chosen dates. Comparing nearby dates uses extra flight searches, so it runs only when you ask.</div>`;
+}
+
 export function buildDateStripHtml(resp, isDisabled = () => false) {
   const days = (resp && resp.days) || [];
   if (!days.length) {
