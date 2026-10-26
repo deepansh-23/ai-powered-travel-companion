@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from app.services.usage_service import usage_recorder
 
 from app.config import settings
 
@@ -76,8 +77,10 @@ class PlaceSuggestService:
             return [], "Place suggestions need GEOAPIFY_API_KEY."
         try:
             async with httpx.AsyncClient(timeout=6.0) as client:
-                resp = await client.get(AUTOCOMPLETE_URL, params={
-                    "text": q, "format": "json", "limit": 10, "lang": "en", "apiKey": api_key})
+                with usage_recorder.track("geoapify", "autocomplete") as _u:
+                    resp = await client.get(AUTOCOMPLETE_URL, params={
+                        "text": q, "format": "json", "limit": 10, "lang": "en", "apiKey": api_key})
+                    _u.status = getattr(resp, "status_code", None)
             if resp.status_code != 200:
                 return [], "Place suggestions are temporarily unavailable."
             items = parse_autocomplete(resp.json(), limit)

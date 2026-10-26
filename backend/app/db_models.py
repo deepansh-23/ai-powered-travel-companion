@@ -1,10 +1,10 @@
 """PostgreSQL tables (SQLAlchemy 2). Portable types so tests can run on SQLite."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -118,3 +118,50 @@ class AppSetting(Base):
     description: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
+
+class ActivityDaily(Base):
+    """Usage counters for the admin analytics: one small row per person (or guest), per day, per feature.
+
+    No request contents, IP addresses or personal data are stored. Rows older than a year are pruned.
+    """
+
+    __tablename__ = "activity_daily"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    actor_id: Mapped[str] = mapped_column(String(40), primary_key=True)   # user id, or a hash for a guest
+    feature: Mapped[str] = mapped_column(String(20), primary_key=True)    # visit, itinerary, area, cafes, medical, places
+    kind: Mapped[str] = mapped_column(String(12), index=True)             # registered | guest
+    count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AccountDeletionRequest(Base):
+    """A user asked an admin to delete their account (status: pending, then removed on approval or dismissed)."""
+
+    __tablename__ = "account_deletion_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ApiUsageDaily(Base):
+    """Daily totals of calls to the AI model and to external APIs, for the admin usage and cost monitor.
+
+    One row per day, provider, model/endpoint, feature and outcome. No prompts, responses, keys, user ids or IP
+    addresses are stored. Rows older than a year are pruned.
+    """
+
+    __tablename__ = "api_usage_daily"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(20), primary_key=True)    # gemini, serpapi, geoapify, railradar, osrm, recaptcha
+    model: Mapped[str] = mapped_column(String(60), primary_key=True)       # AI model name, or the endpoint / engine called
+    feature: Mapped[str] = mapped_column(String(20), primary_key=True)     # itinerary, area, cafes, medical, places, other
+    outcome: Mapped[str] = mapped_column(String(8), primary_key=True)      # ok | error
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+    total_ms: Mapped[int] = mapped_column(Integer, default=0)
+    max_ms: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)

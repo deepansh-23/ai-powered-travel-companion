@@ -16,9 +16,9 @@ import math
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,8 +27,9 @@ from app.db import db_status, get_db
 from app.db_models import User
 from app.security import require_same_origin
 from app.services import auth_service
+from app.services.activity_service import today as activity_today
 from app.services.captcha_service import captcha_service
-from admin import service
+from admin import analytics, service, usage as usage_report
 from admin.monitoring import metrics_tracker
 from admin.permissions import (
     ADMIN_STEPUP_COOKIE,
@@ -54,6 +55,9 @@ from admin.schemas import (
     AdminUserDetail,
     AdminUserItem,
     AdminUsersResponse,
+    DeletionRequestItem,
+    DeletionRequestsResponse,
+    ResetPasswordResponse,
     DiagnosticsResponse,
     OverviewResponse,
     PatchFeedbackRequest,
@@ -366,11 +370,13 @@ async def list_users(
     page: int = Query(1, ge=1),
     search: Optional[str] = Query(None, max_length=100),
     role: Optional[str] = Query(None),
+    account_status: Optional[str] = Query(None, alias="status", pattern="^(active|suspended|deletion_requested)$"),
+    sort: Optional[str] = Query(None, pattern="^(newest|oldest|last_active|username)$"),
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        users, total = await service.list_users(db, page=page, search=search, role=role)
+        users, total = await service.list_users(db, page=page, search=search, role=role, status=account_status, sort=sort)
         pages = max(1, math.ceil(total / PAGE_SIZE))
         return AdminUsersResponse(
             users=[AdminUserItem(**u) for u in users],
@@ -445,6 +451,154 @@ async def delete_user(
     except Exception:
         logger.exception("Admin delete_user failed")
         raise HTTPException(status_code=500, detail="Failed to delete user.")
+
+
+@router.post(
+    "/users/{user_id}/reset-password",
+    response_model=ResetPasswordResponse,
+    dependencies=[Depends(require_same_origin)],
+)
+async def reset_user_password(
+    user_id: str,
+    response: Response,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gives the user a new random password (shown ONCE to the admin) and signs them out everywhere."""
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        temp = await service.reset_user_password(db, user_id, admin.id)
+        return ResetPasswordResponse(
+            temporary_password=temp,
+            message="Share this password with the user privately. They are signed out everywhere and should change it after logging in.",
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("Admin reset_user_password failed")
+        raise HTTPException(status_code=500, detail="Failed to reset the password.")
+
+
+@router.get("/deletion-requests", response_model=DeletionRequestsResponse)
+async def list_deletion_requests(
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    items = await service.list_deletion_requests(db)
+    return DeletionRequestsResponse(requests=[DeletionRequestItem(**i) for i in items], total=len(items))
+
+
+@router.post("/deletion-requests/{request_id}/approve", status_code=status.HTTP_204_NO_CONTENT,
+             dependencies=[Depends(require_same_origin)])
+async def approve_deletion_request(
+    request_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await service.approve_deletion_request(db, request_id, admin.id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        logger.exception("Admin approve_deletion_request failed")
+        raise HTTPException(status_code=500, detail="Failed to delete the account.")
+
+
+@router.post("/deletion-requests/{request_id}/dismiss", status_code=status.HTTP_204_NO_CONTENT,
+             dependencies=[Depends(require_same_origin)])
+async def dismiss_deletion_request(
+    request_id: str,
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await service.dismiss_deletion_request(db, request_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ──────────────────────────── AI & API usage monitor ─────────────────────────
+
+@router.get("/usage")
+async def get_usage(
+    start: Optional[str] = Query(None, max_length=10),
+    end: Optional[str] = Query(None, max_length=10),
+    days: int = Query(30, ge=1, le=366),
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """AI requests by model and feature, failures, response times, external API usage, estimated spend and alerts."""
+    try:
+        s, e = analytics.parse_range(start, end, days, activity_today())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        return await usage_report.build_usage(db, s, e)
+    except Exception:
+        logger.exception("Admin usage report failed")
+        raise HTTPException(status_code=500, detail="Failed to build the usage report.")
+
+
+@router.get("/usage/settings")
+async def get_usage_settings(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    limits = await usage_report.get_limits(db)
+    prices = await usage_report.get_prices(db)
+    return {"limits": limits, "prices": {k: list(v) for k, v in prices.items()},
+            "default_prices": {k: list(v) for k, v in usage_report.DEFAULT_PRICES.items()}}
+
+
+@router.put("/usage/settings", dependencies=[Depends(require_same_origin)])
+async def put_usage_settings(
+    body: Dict[str, Any] = Body(...),
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Saves alert limits and/or model prices. Only these two keys are accepted; nothing else can be stored here."""
+    extra = set(body) - {"limits", "prices"}
+    if extra:
+        raise HTTPException(status_code=400, detail="Unknown field: " + ", ".join(sorted(map(str, extra))))
+    if body.get("limits") is not None and not isinstance(body["limits"], dict):
+        raise HTTPException(status_code=400, detail="limits must be an object.")
+    if body.get("prices") is not None and not isinstance(body["prices"], dict):
+        raise HTTPException(status_code=400, detail="prices must be an object.")
+    try:
+        await usage_report.save_limits_and_prices(db, body.get("limits"), body.get("prices"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await get_usage_settings(_admin, db)
+
+
+@router.post("/usage/serpapi-quota", dependencies=[Depends(require_same_origin)])
+async def check_serpapi_quota(_admin: User = Depends(require_admin)):
+    """Asks SerpApi how many searches are left (its free account endpoint; costs no search)."""
+    return await usage_report.serpapi_account(force=True)
+
+
+# ──────────────────────────── Analytics ─────────────────────────────────────
+
+@router.get("/analytics")
+async def get_analytics(
+    start: Optional[str] = Query(None, max_length=10),
+    end: Optional[str] = Query(None, max_length=10),
+    days: int = Query(30, ge=1, le=366),
+    interval: str = Query("day", pattern="^(day|week|month)$"),
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Active users, registrations, feature usage and trends for a date range (UTC days)."""
+    try:
+        s, e = analytics.parse_range(start, end, days, activity_today())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        return await analytics.build_analytics(db, s, e, interval)
+    except Exception:
+        logger.exception("Admin analytics failed")
+        raise HTTPException(status_code=500, detail="Failed to build analytics.")
 
 
 # ──────────────────────────── Itineraries ───────────────────────────────────

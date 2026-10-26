@@ -122,6 +122,26 @@ class ApiClient {
     });
   }
 
+  // Change the password of the logged-in account
+  changePassword(currentPassword, newPassword) {
+    return this._request("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      silent401: true
+    });
+  }
+
+  // Ask an administrator to delete the account (nothing is deleted until an admin approves)
+  getDeletionRequest() {
+    return this._request("/api/auth/delete-request", { method: "GET", silent401: true });
+  }
+  requestAccountDeletion(reason) {
+    return this._request("/api/auth/delete-request", { method: "POST", body: JSON.stringify({ reason: reason || "" }), silent401: true });
+  }
+  withdrawDeletionRequest() {
+    return this._request("/api/auth/delete-request", { method: "DELETE", silent401: true });
+  }
+
   // Saved sessions (drafts a user can resume later)
   listSessions(service) {
     const q = service ? `?service=${encodeURIComponent(service)}` : "";

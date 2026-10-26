@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import db_status, get_db
-from app.db_models import User
+from app.db_models import AccountDeletionRequest, User
 from app.models.auth import (
-    AuthResponse, ChangePasswordRequest, DeleteAccountRequest, GuestStartRequest, LoginRequest, MeResponse,
+    AuthResponse, ChangePasswordRequest, DeleteAccountRequest, DeletionRequestBody, GuestStartRequest, LoginRequest, MeResponse,
     RecoverRequest, RegisterRequest, UserPublic,
 )
 from app.security import (
@@ -195,3 +195,33 @@ async def delete_account(req: DeleteAccountRequest, response: Response, user: Us
     response.delete_cookie(settings.AUTH_COOKIE_NAME, path="/")
     response.delete_cookie(settings.GUEST_COOKIE_NAME, path="/")
     return {"status": "account_deleted"}
+
+
+# ---------------------------------------------------------------- ask an admin to delete the account
+@router.get("/delete-request")
+async def get_delete_request(user: User = Depends(require_user), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    row = (await db.execute(select(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id))).scalar_one_or_none()
+    return {"pending": bool(row and row.status == "pending"), "requested_at": row.requested_at if row else None}
+
+
+@router.post("/delete-request", dependencies=[Depends(require_same_origin)])
+async def request_account_deletion(req: DeletionRequestBody, user: User = Depends(require_user), db: AsyncSession = Depends(get_db)):
+    """Asks an administrator to delete this account. Nothing is deleted until an admin approves it."""
+    from sqlalchemy import select
+    reason = " ".join((req.reason or "").split())[:300]
+    row = (await db.execute(select(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id))).scalar_one_or_none()
+    if row is None:
+        db.add(AccountDeletionRequest(user_id=user.id, reason=reason or None, status="pending"))
+    else:
+        row.reason, row.status = (reason or row.reason), "pending"
+    await db.commit()
+    return {"status": "requested"}
+
+
+@router.delete("/delete-request", dependencies=[Depends(require_same_origin)])
+async def withdraw_deletion_request(user: User = Depends(require_user), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete as sa_delete
+    await db.execute(sa_delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id))
+    await db.commit()
+    return {"status": "withdrawn"}

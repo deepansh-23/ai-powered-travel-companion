@@ -145,6 +145,7 @@ function init() {
   $("tabLogin").addEventListener("click", () => showPanel("panelLogin"));
   $("tabRegister").addEventListener("click", () => showPanel("panelRegister"));
   $("linkForgot").addEventListener("click", () => showPanel("panelRecover"));
+  $("linkAdminLogin").addEventListener("click", () => authManager.openAdminLoginDialog());
   $("linkBackToLogin").addEventListener("click", () => showPanel("panelLogin"));
 
   document.querySelectorAll("[data-toggle-password]").forEach((box) => {

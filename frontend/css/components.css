@@ -701,7 +701,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 1000;
+  z-index: 10200;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -745,7 +745,7 @@
   bottom: 0;
   background-color: rgba(17, 24, 39, 0.6);
   backdrop-filter: blur(2px);
-  z-index: 200;
+  z-index: 10100;   /* above the full-screen welcome gate (10000) so dialogs opened from it are visible */
   align-items: center;
   justify-content: center;
   padding: var(--space-md);

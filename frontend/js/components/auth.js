@@ -388,6 +388,74 @@ class AuthManager {
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
   }
 
+  // ------------------------------------------------------------------ change password
+  openChangePasswordDialog() {
+    modal.open({
+      title: "Change your password",
+      bodyHtml: `
+        <div class="form-group"><label class="form-label" for="cpCurrent">Current password</label>
+          <input class="form-input" id="cpCurrent" type="password" autocomplete="current-password" maxlength="128"></div>
+        <div class="form-group" style="margin-top:10px;"><label class="form-label" for="cpNew">New password (at least 8 characters)</label>
+          <input class="form-input" id="cpNew" type="password" autocomplete="new-password" maxlength="128"></div>
+        <div class="form-group" style="margin-top:10px;"><label class="form-label" for="cpNew2">Repeat the new password</label>
+          <input class="form-input" id="cpNew2" type="password" autocomplete="new-password" maxlength="128"></div>
+        <div class="auth-message" id="cpMessage" role="alert" aria-live="polite"></div>`,
+      footerHtml: `
+        <button type="button" class="btn btn-secondary btn-sm btn-close-modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnConfirmChangePw">Change password</button>`
+    });
+    const $ = (id) => document.getElementById(id);
+    const msg = $("cpMessage");
+    const fail = (t) => { msg.className = "auth-message error"; msg.textContent = t; };
+    $("cpCurrent").focus();
+    $("btnConfirmChangePw").addEventListener("click", async () => {
+      if (!$("cpCurrent").value) return fail("Enter your current password.");
+      if ($("cpNew").value.length < 8) return fail("The new password must be at least 8 characters.");
+      if ($("cpNew").value !== $("cpNew2").value) return fail("The two new passwords do not match.");
+      const btn = $("btnConfirmChangePw");
+      btn.disabled = true;
+      try {
+        await api.changePassword($("cpCurrent").value, $("cpNew").value);
+        modal.close();
+        toast.success("Your password was changed.");
+      } catch (err) {
+        fail(err.message);
+        btn.disabled = false;
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------ ask an admin to delete the account
+  async openDeletionRequestDialog() {
+    let pending = false;
+    try { pending = !!(await api.getDeletionRequest()).pending; } catch (_) { /* treated as "no request yet" */ }
+    modal.open({
+      title: "Request account deletion",
+      bodyHtml: pending
+        ? `<p>Your request is <strong>waiting for an administrator</strong>. Your account stays active until it is approved.</p>
+           <div class="auth-message" id="drMessage" role="alert" aria-live="polite"></div>`
+        : `<p>An administrator will review your request and then delete your login, History and saved sessions.
+           Until then your account keeps working. You can withdraw the request at any time.</p>
+           <div class="form-group" style="margin-top:10px;"><label class="form-label" for="drReason">Reason (optional)</label>
+             <textarea class="form-input" id="drReason" rows="3" maxlength="300" placeholder="Why are you leaving? (optional)"></textarea></div>
+           <div class="auth-message" id="drMessage" role="alert" aria-live="polite"></div>`,
+      footerHtml: pending
+        ? `<button type="button" class="btn btn-secondary btn-sm btn-close-modal">Close</button>
+           <button type="button" class="btn btn-danger btn-sm" id="btnWithdrawRequest">Withdraw request</button>`
+        : `<button type="button" class="btn btn-secondary btn-sm btn-close-modal">Cancel</button>
+           <button type="button" class="btn btn-danger btn-sm" id="btnSendRequest">Send request</button>`
+    });
+    const msg = document.getElementById("drMessage");
+    const run = async (fn, okText) => {
+      try { await fn(); modal.close(); toast.success(okText); }
+      catch (err) { msg.className = "auth-message error"; msg.textContent = err.message; }
+    };
+    const send = document.getElementById("btnSendRequest");
+    if (send) send.addEventListener("click", () => run(() => api.requestAccountDeletion(document.getElementById("drReason").value), "Request sent. An administrator will review it."));
+    const withdraw = document.getElementById("btnWithdrawRequest");
+    if (withdraw) withdraw.addEventListener("click", () => run(() => api.withdrawDeletionRequest(), "Your request was withdrawn."));
+  }
+
   // ------------------------------------------------------------------ navbar
   renderNav() {
     const actions = document.querySelector(".navbar-actions");
@@ -410,8 +478,10 @@ class AuthManager {
             </button>
             <div class="auth-menu-list" id="authMenuList" role="menu" hidden>
               ${adminItemHtml}
+              <button type="button" class="auth-menu-item" role="menuitem" id="btnChangePassword">Change password</button>
               <button type="button" class="auth-menu-item" role="menuitem" id="btnLogout">Log out</button>
-              <button type="button" class="auth-menu-item danger" role="menuitem" id="btnDeleteAccount">Delete account</button>
+              <button type="button" class="auth-menu-item" role="menuitem" id="btnRequestDeletion">Request account deletion</button>
+              <button type="button" class="auth-menu-item danger" role="menuitem" id="btnDeleteAccount">Delete account now</button>
             </div>
           </div>`;
         const menuBtn = box.querySelector("#authMenuBtn");
@@ -424,6 +494,8 @@ class AuthManager {
         document.addEventListener("click", () => { list.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); });
         box.querySelector("#btnLogout").addEventListener("click", () => this.logout());
         box.querySelector("#btnDeleteAccount").addEventListener("click", () => { list.hidden = true; this.openDeleteAccountDialog(); });
+        box.querySelector("#btnChangePassword").addEventListener("click", () => { list.hidden = true; this.openChangePasswordDialog(); });
+        box.querySelector("#btnRequestDeletion").addEventListener("click", () => { list.hidden = true; this.openDeletionRequestDialog(); });
       } else if (this.guest) {
         box.innerHTML = `
           <span class="badge badge-secondary guest-badge" title="${escapeHtml(GUEST_LIMITS_NOTE)}">Guest</span>
@@ -437,7 +509,7 @@ class AuthManager {
 
     const drawer = document.getElementById("mobileDrawer");
     if (drawer) {
-      ["drawerAdmin", "drawerAuth", "drawerDelete"].forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
+      ["drawerAdmin", "drawerAuth", "drawerDelete", "drawerPassword", "drawerRequest"].forEach((id) => { const el = document.getElementById(id); if (el) el.remove(); });
       const add = (id, text, href, onclick) => {
         const a = document.createElement("a");
         a.id = id;
@@ -452,7 +524,9 @@ class AuthManager {
           add("drawerAdmin", "🛡️ Admin Dashboard", "/admin/");
         }
         add("drawerAuth", `Log out (${this.user.username})`, "#", () => this.logout());
-        add("drawerDelete", "Delete account", "#", () => this.openDeleteAccountDialog());
+        add("drawerPassword", "Change password", "#", () => this.openChangePasswordDialog());
+        add("drawerRequest", "Request account deletion", "#", () => this.openDeletionRequestDialog());
+        add("drawerDelete", "Delete account now", "#", () => this.openDeleteAccountDialog());
       } else if (this.guest) {
         add("drawerAuth", "Log in (leave guest mode)", this.loginUrl());
         add("drawerDelete", "End guest session", "#", () => this.logout());

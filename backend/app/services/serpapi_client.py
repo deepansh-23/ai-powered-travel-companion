@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Any, Dict, Optional
 import httpx
+from app.services.usage_service import usage_recorder
 
 from app.config import settings
 
@@ -63,7 +64,9 @@ class SerpApiClient:
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(SERPAPI_BASE_URL, params=full_params)
+                with usage_recorder.track("serpapi", str(params.get("engine") or "search")) as _u:
+                    response = await client.get(SERPAPI_BASE_URL, params=full_params)
+                    _u.status = getattr(response, "status_code", None)
 
                 if response.status_code == 401 or response.status_code == 403:
                     raise RuntimeError("Invalid SERPAPI_API_KEY: authentication failed with SerpApi.")

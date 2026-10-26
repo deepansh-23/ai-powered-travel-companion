@@ -133,6 +133,7 @@ class AIService:
       raise RuntimeError("Missing GEMINI_API_KEY in configuration.")
 
     import time
+    from app.services.usage_service import status_from_exception, tokens_from_gemini, usage_recorder
 
     models_to_try = self._get_candidate_models()
     errors: Dict[str, str] = {}
@@ -144,6 +145,7 @@ class AIService:
       # (quota exhausted) will not resolve by retrying immediately, so
       # we fail fast on those and move to the next model instead.
       for attempt in range(2):
+        _t0 = time.perf_counter()
         try:
           if _use_legacy_genai:
             genai.configure(api_key=api_key)  # type: ignore
@@ -151,7 +153,10 @@ class AIService:
                 model_name=model_name, system_instruction=system_prompt or _GEMINI_SYSTEM_PROMPT
             )
             resp = model.generate_content(prompt)
-            return resp.text.strip()
+            text = resp.text.strip()
+            _tin, _tout = tokens_from_gemini(resp)
+            usage_recorder.record("gemini", model_name, True, (time.perf_counter() - _t0) * 1000, _tin, _tout)
+            return text
           else:
             client = genai_client.Client(api_key=api_key)
             resp = client.models.generate_content(
@@ -161,8 +166,13 @@ class AIService:
                     system_instruction=system_prompt or _GEMINI_SYSTEM_PROMPT,
                 ),
             )
-            return resp.text.strip()
+            text = resp.text.strip()
+            _tin, _tout = tokens_from_gemini(resp)
+            usage_recorder.record("gemini", model_name, True, (time.perf_counter() - _t0) * 1000, _tin, _tout)
+            return text
         except Exception as exc:
+          usage_recorder.record("gemini", model_name, False, (time.perf_counter() - _t0) * 1000,
+                                status=status_from_exception(exc), error=exc)
           err_text = str(exc)
           errors[model_name] = f"{type(exc).__name__}: {exc}"
           is_transient_503 = (

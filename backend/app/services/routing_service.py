@@ -8,6 +8,7 @@
 import logging
 from typing import Dict, Any, Optional
 import httpx
+from app.services.usage_service import usage_recorder
 
 from app.config import settings
 from app.utils.geo import (
@@ -99,7 +100,9 @@ class RoutingService:
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(osrm_url)
+                with usage_recorder.track("osrm", "route") as _u:
+                    response = await client.get(osrm_url)
+                    _u.status = getattr(response, "status_code", None)
 
                 if response.status_code == 200:
                     data = response.json()

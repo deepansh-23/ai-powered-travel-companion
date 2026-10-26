@@ -6,13 +6,16 @@ Password hashes, tokens and internal secrets are never returned.
 
 import math
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db_models import AppSetting, AuthSession, Feedback, History, LoginAttempt, SavedSession, User
+from app.db_models import (
+    AccountDeletionRequest, AppSetting, AuthSession, Feedback, History, LoginAttempt, SavedSession, User,
+)
 
 
 def _utcnow() -> datetime:
@@ -57,14 +60,59 @@ async def get_overview(db: AsyncSession) -> dict:
 PAGE_SIZE = 20
 
 
+def _last_active_subquery():
+    """Latest time any of the user's browsers was seen (sessions refresh this about every 5 minutes)."""
+    return (
+        select(AuthSession.user_id.label("uid"), func.max(AuthSession.last_seen_at).label("last_seen"))
+        .group_by(AuthSession.user_id)
+        .subquery()
+    )
+
+
+def _user_row(u: User, last_seen, counts: dict, pending: dict) -> dict:
+    last_active = _as_utc(last_seen) or _as_utc(u.last_login_at)
+    login = _as_utc(u.last_login_at)
+    if last_active and login and login > last_active:
+        last_active = login
+    req = pending.get(u.id)
+    return {
+        "id": u.id,
+        "username": u.username,
+        "is_active": u.is_active,
+        "is_admin": bool(getattr(u, "is_admin", False)),
+        "created_at": _as_utc(u.created_at),
+        "last_login_at": login,
+        "last_active_at": last_active,
+        "itinerary_count": counts.get(u.id, 0),
+        "deletion_requested": req is not None,
+        "deletion_requested_at": _as_utc(req.requested_at) if req else None,
+        "deletion_reason": req.reason if req else None,
+    }
+
+
+async def _pending_requests(db: AsyncSession, user_ids: list) -> dict:
+    if not user_ids:
+        return {}
+    rows = (await db.execute(
+        select(AccountDeletionRequest).where(AccountDeletionRequest.user_id.in_(user_ids), AccountDeletionRequest.status == "pending")
+    )).scalars().all()
+    return {r.user_id: r for r in rows}
+
+
 async def list_users(
     db: AsyncSession,
     page: int = 1,
     search: Optional[str] = None,
     role: Optional[str] = None,
+    status: Optional[str] = None,
+    sort: Optional[str] = None,
 ) -> Tuple[list, int]:
-    """Return (user_rows, total_count) for the given page."""
-    q = select(User)
+    """Return (user_rows, total_count) for the given page.
+
+    status: 'active' | 'suspended' | 'deletion_requested'.  sort: newest (default) | oldest | last_active | username.
+    """
+    last = _last_active_subquery()
+    q = select(User, last.c.last_seen).outerjoin(last, last.c.uid == User.id)
 
     if search:
         term = f"%{search.strip().lower()}%"
@@ -75,54 +123,49 @@ async def list_users(
     elif role == "user":
         q = q.where(or_(User.is_admin.is_(False), User.is_admin.is_(None)))
 
+    if status == "active":
+        q = q.where(User.is_active.is_(True))
+    elif status == "suspended":
+        q = q.where(User.is_active.is_(False))
+    elif status == "deletion_requested":
+        q = q.where(User.id.in_(select(AccountDeletionRequest.user_id).where(AccountDeletionRequest.status == "pending")))
+
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar_one()
 
+    order = {
+        "oldest": [User.created_at.asc()],
+        "username": [User.username_lower.asc()],
+        "last_active": [func.coalesce(last.c.last_seen, User.last_login_at).desc().nulls_last(), User.created_at.desc()],
+    }.get((sort or "").lower(), [User.created_at.desc()])
     offset = (max(page, 1) - 1) * PAGE_SIZE
-    rows = (await db.execute(
-        q.order_by(User.created_at.desc()).offset(offset).limit(PAGE_SIZE)
-    )).scalars().all()
+    rows = (await db.execute(q.order_by(*order).offset(offset).limit(PAGE_SIZE))).all()
 
-    # Fetch itinerary counts per user
-    user_ids = [u.id for u in rows]
+    user_ids = [u.id for u, _ in rows]
     counts: dict = {}
     if user_ids:
         cnt_rows = (await db.execute(
             select(History.user_id, func.count()).where(History.user_id.in_(user_ids)).group_by(History.user_id)
         )).all()
         counts = {r[0]: r[1] for r in cnt_rows}
+    pending = await _pending_requests(db, user_ids)
 
-    result = []
-    for u in rows:
-        result.append({
-            "id": u.id,
-            "username": u.username,
-            "is_active": u.is_active,
-            "is_admin": bool(getattr(u, "is_admin", False)),
-            "created_at": _as_utc(u.created_at),
-            "last_login_at": _as_utc(u.last_login_at),
-            "itinerary_count": counts.get(u.id, 0),
-        })
-
-    return result, total
+    return [_user_row(u, ls, counts, pending) for u, ls in rows], total
 
 
 async def get_user(db: AsyncSession, user_id: str) -> Optional[dict]:
-    u = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if u is None:
+    last = _last_active_subquery()
+    row = (await db.execute(
+        select(User, last.c.last_seen).outerjoin(last, last.c.uid == User.id).where(User.id == user_id)
+    )).first()
+    if row is None:
         return None
+    u, last_seen = row
     cnt = (await db.execute(
         select(func.count()).select_from(History).where(History.user_id == user_id)
     )).scalar_one()
-    return {
-        "id": u.id,
-        "username": u.username,
-        "is_active": u.is_active,
-        "is_admin": bool(getattr(u, "is_admin", False)),
-        "created_at": _as_utc(u.created_at),
-        "last_login_at": _as_utc(u.last_login_at),
-        "itinerary_count": cnt,
-    }
+    pending = await _pending_requests(db, [user_id])
+    return _user_row(u, last_seen, {user_id: cnt}, pending)
 
 
 async def count_admins(db: AsyncSession) -> int:
@@ -194,6 +237,7 @@ async def delete_user(
             raise ValueError("Cannot delete the last admin account.")
 
     uname = target.username_lower
+    await db.execute(delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == target_id))
     # Detach reviews (set user_id to NULL to preserve them anonymously)
     await db.execute(update(Feedback).where(Feedback.user_id == target_id).values(user_id=None))
     await db.execute(delete(History).where(History.user_id == target_id))
@@ -201,6 +245,72 @@ async def delete_user(
     await db.execute(delete(AuthSession).where(AuthSession.user_id == target_id))
     await db.execute(delete(LoginAttempt).where(LoginAttempt.username_lower == uname))
     await db.execute(delete(User).where(User.id == target_id))
+    await db.commit()
+
+
+# ──────────────────────────── Password reset + deletion requests ──────────────
+
+_TEMP_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def _temporary_password(username: str) -> str:
+    from app.services import auth_service
+    for _ in range(20):
+        pw = "".join(secrets.choice(_TEMP_ALPHABET) for _ in range(14))
+        try:
+            auth_service.validate_password(pw, username)
+            return pw
+        except auth_service.ValidationFailed:
+            continue
+    raise RuntimeError("Could not generate a temporary password.")
+
+
+async def reset_user_password(db: AsyncSession, target_id: str, acting_admin_id: str) -> str:
+    """Sets a new random password, signs the user out everywhere and returns it (shown to the admin once)."""
+    from app.services import auth_service
+    target = (await db.execute(select(User).where(User.id == target_id))).scalar_one_or_none()
+    if target is None:
+        raise LookupError("User not found.")
+    if target_id == acting_admin_id:
+        raise ValueError("Use the normal change-password option for your own account.")
+    if getattr(target, "is_admin", False):
+        raise ValueError("Admin passwords cannot be reset here. Remove the admin role first, or ask the admin to use account recovery.")
+    temp = _temporary_password(target.username)
+    target.password_hash = auth_service._hasher.hash(temp)
+    await db.execute(delete(AuthSession).where(AuthSession.user_id == target_id))
+    await db.execute(delete(LoginAttempt).where(LoginAttempt.username_lower == target.username_lower))
+    await db.commit()
+    return temp
+
+
+async def list_deletion_requests(db: AsyncSession) -> list:
+    last = _last_active_subquery()
+    rows = (await db.execute(
+        select(AccountDeletionRequest, User, last.c.last_seen)
+        .join(User, User.id == AccountDeletionRequest.user_id)
+        .outerjoin(last, last.c.uid == User.id)
+        .where(AccountDeletionRequest.status == "pending")
+        .order_by(AccountDeletionRequest.requested_at.asc())
+    )).all()
+    return [{
+        "id": r.id, "user_id": u.id, "username": u.username, "reason": r.reason or "",
+        "requested_at": _as_utc(r.requested_at), "registered_at": _as_utc(u.created_at),
+        "last_active_at": _as_utc(ls) or _as_utc(u.last_login_at), "is_admin": bool(getattr(u, "is_admin", False)),
+    } for r, u, ls in rows]
+
+
+async def approve_deletion_request(db: AsyncSession, request_id: str, acting_admin_id: str) -> None:
+    req = (await db.execute(select(AccountDeletionRequest).where(AccountDeletionRequest.id == request_id))).scalar_one_or_none()
+    if req is None or req.status != "pending":
+        raise LookupError("Deletion request not found.")
+    await delete_user(db, req.user_id, acting_admin_id)      # same safety guards as a normal delete
+
+
+async def dismiss_deletion_request(db: AsyncSession, request_id: str) -> None:
+    req = (await db.execute(select(AccountDeletionRequest).where(AccountDeletionRequest.id == request_id))).scalar_one_or_none()
+    if req is None or req.status != "pending":
+        raise LookupError("Deletion request not found.")
+    await db.delete(req)                                      # the user may ask again later
     await db.commit()
 
 

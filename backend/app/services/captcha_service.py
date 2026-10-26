@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Optional, Dict, Any
 import httpx
+from app.services.usage_service import usage_recorder
 
 from app.config import settings
 
@@ -110,7 +111,9 @@ class CaptchaService:
                 if remote_ip:
                     data["remoteip"] = remote_ip
 
-                response = await client.post(self.provider()["verify_url"], data=data)
+                with usage_recorder.track("recaptcha", "verify") as _u:
+                    response = await client.post(self.provider()["verify_url"], data=data)
+                    _u.status = getattr(response, "status_code", None)
                 result = response.json()
                 success = result.get("success", False)
                 if not success:

@@ -31,12 +31,18 @@ from app.db import dispose_db, init_db
 from admin.routes import router as admin_router
 from admin.monitoring import ApiMetricsMiddleware
 from app.services.site_settings_guard import MaintenanceModeMiddleware
+from app.services.activity_service import ActivityMiddleware, activity_tracker
+from app.services.usage_service import usage_recorder
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await init_db()      # connect to PostgreSQL and create tables (never blocks startup on failure)
+    activity_tracker.start()   # batches usage counters for the admin Analytics page
+    usage_recorder.start()     # batches AI / external API call counters for the admin usage monitor
     yield
+    await usage_recorder.stop()
+    await activity_tracker.stop()
     await dispose_db()
 
 app = FastAPI(
@@ -56,6 +62,8 @@ app.add_middleware(
 )
 # Maintenance mode (admin setting) — added BEFORE metrics so 503s are still recorded
 app.add_middleware(MaintenanceModeMiddleware)
+# Anonymous usage counters for the admin Analytics page
+app.add_middleware(ActivityMiddleware)
 # API Metrics Middleware for Admin Monitoring
 app.add_middleware(ApiMetricsMiddleware)
 

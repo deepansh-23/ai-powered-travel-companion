@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Optional, List, Dict, Any, Tuple
 import httpx
+from app.services.usage_service import usage_recorder
 
 from app.config import settings
 from app.models.transport import TransportOption
@@ -69,7 +70,9 @@ class RailRadarClient:
             raise RuntimeError("RAILRADAR_API_KEY is not configured.")
         headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(f"{self.BASE_URL}{path}", headers=headers, params=params or {})
+            with usage_recorder.track("railradar", "lookup") as _u:
+                response = await client.get(f"{self.BASE_URL}{path}", headers=headers, params=params or {})
+                _u.status = getattr(response, "status_code", None)
         if response.status_code in (401, 403):
             raise RuntimeError("Invalid RAILRADAR_API_KEY: authentication failed with RailRadar.")
         if response.status_code == 429:
@@ -110,7 +113,9 @@ class RailRadarClient:
         params = {"date": date_str} if date_str else {}
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(url, headers=headers, params=params)
+            with usage_recorder.track("railradar", "trains_between") as _u:
+                response = await client.get(url, headers=headers, params=params)
+                _u.status = getattr(response, "status_code", None)
             if response.status_code == 401 or response.status_code == 403:
                 raise RuntimeError("Invalid RAILRADAR_API_KEY: authentication failed with RailRadar.")
             elif response.status_code == 429:

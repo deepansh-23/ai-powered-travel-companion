@@ -90,7 +90,9 @@ A private control centre at **`/admin/`** for the site owner. It is built into t
 | Section | What it does |
 |---|---|
 | 📊 **Overview** | Total users, admins, active/inactive accounts, itineraries and sign-ups in the last 7 days |
-| 👥 **Users** | Search, activate/deactivate, promote/demote admins, delete accounts (with safety guards: you can't remove yourself or the last admin) |
+| 📈 **Analytics** | Daily, weekly and monthly active users, new vs returning users, guests vs registered users, most-used features (Itinerary Planner, Area Guide, cafés, medical, places), date-range filters and trend charts |
+| 💸 **AI & API Usage** | AI requests by model and feature, successes, failures and response times, external API usage (SerpApi, Geoapify, RailRadar, OSRM, reCAPTCHA) with quota bars, estimated AI spend, and alerts for limits, failure spikes and unusually high traffic |
+| 👥 **Users** | Search and filter by role or status, sort by newest or last activity, see registration date and last activity, suspend or reactivate, promote or demote admins, reset a password (temporary password shown once), delete accounts, and review account deletion requests (with safety guards: you can't remove yourself or the last admin) |
 | 🗺️ **Itineraries** | Search, filter by type, and view any saved record (itinerary, places, cafés, medical, area guide) in a readable layout, with raw data one click away. Delete saved items |
 | 📈 **API Monitoring** | Request counts, error rate, response times, slowest endpoints and recent failures (last 15 minutes or 24 hours) |
 | 💚 **System Health** | App uptime, PostgreSQL connectivity and latency, and whether each external service is configured |
@@ -107,6 +109,25 @@ A private control centre at **`/admin/`** for the site owner. It is built into t
 - **Privacy.** In the Feedback view, emails, phone numbers and token-like text are masked. Diagnostics keep no request bodies, cookies or tokens, and show only partly hidden IP addresses.
 - **Bounded logging.** Monitoring and diagnostics live in memory only (last 10,000 requests and 300 errors) and reset when the server restarts.
 - **Disruptive settings need confirmation.** Turning on maintenance mode, or turning off registration, guest mode or reviews, asks you to confirm, and the server enforces that too.
+
+### Analytics and privacy
+
+Analytics use anonymous counters: a day, a user id (or a random guest id), a feature name and a count. No search text, locations, IP addresses or personal data are stored, and rows older than a year are removed. Counting starts the day this update goes live, so earlier days show no activity. Registrations are read from account records and cover every day. Days are counted in UTC.
+
+### AI & API usage monitor
+
+Every call to the Gemini model and to the external APIs is counted with its model or endpoint, feature, result, response time and token counts. Prompts, answers, API keys, user ids and IP addresses are never stored, and error text is scrubbed of anything that looks like a key. Rows older than a year are removed.
+
+- **Spend is an estimate.** It uses editable list prices per model (USD per 1 million tokens). Models without a price get no estimate, and a free tier may cost nothing.
+- **Limits are alerts, not blocks.** Set your plan sizes (AI requests per day, spend per month, SerpApi searches per month, Geoapify and RailRadar requests per day, calls per hour). The page warns at 80% and flags 100%. Visitors are never blocked.
+- **Other alerts:** unusually high traffic compared with the last two weeks, a service failing often today, and provider rate or quota refusals (HTTP 429).
+- **SerpApi quota:** the "Check SerpApi searches left" button reads your remaining searches from SerpApi's free account endpoint.
+- Recent failures are kept in memory only and reset when the server restarts.
+
+### Account controls
+
+- **Reset password:** gives the user a random temporary password, shown once to the admin, and signs them out everywhere. It is not available for your own account or for other admins.
+- **Deletion requests:** users choose *Request account deletion* in their account menu. Nothing is deleted until an admin approves. Admins can also dismiss a request. Users can still use *Delete account now* (needs their password) or *Change password* from the same menu.
 
 ### Settings explained
 

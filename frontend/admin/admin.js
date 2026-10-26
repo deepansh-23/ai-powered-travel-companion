@@ -28,7 +28,7 @@ let admState = {
   currentPage: 'overview',
   adminUsername: '',
 
-  users: { data: [], total: 0, page: 1, pages: 1, search: '', role: '' },
+  users: { data: [], total: 0, page: 1, pages: 1, search: '', role: '', status: '', sort: 'newest' },
   itineraries: { data: [], total: 0, page: 1, pages: 1, search: '', type: '' },
 
   monitoring: { window: '15m', autoRefreshInterval: 30, timer: null },
@@ -250,6 +250,8 @@ function admNavigate(page) {
   // Update header title
   const titles = {
     overview: 'Overview',
+    analytics: 'Analytics',
+    usage: 'AI & API Usage',
     users: 'User Management',
     itineraries: 'Itinerary Management',
     monitoring: 'API Monitoring',
@@ -265,6 +267,8 @@ function admNavigate(page) {
 
   // Load data for page
   if (page === 'overview') admLoadOverview();
+  else if (page === 'analytics' && typeof admLoadAnalytics === 'function') admLoadAnalytics();
+  else if (page === 'usage' && typeof admLoadUsage === 'function') admLoadUsage();
   else if (page === 'users') admLoadUsers();
   else if (page === 'itineraries') admLoadItineraries();
   else if (page === 'monitoring') admLoadMonitoring();
@@ -445,6 +449,8 @@ async function admLoadUsers(page = 1) {
     const params = new URLSearchParams({ page });
     if (admState.users.search) params.set('search', admState.users.search);
     if (admState.users.role) params.set('role', admState.users.role);
+    if (admState.users.status) params.set('status', admState.users.status);
+    if (admState.users.sort && admState.users.sort !== 'newest') params.set('sort', admState.users.sort);
 
     const res = await admFetch(`${ADM_API.users}?${params}`);
     admState.users.data = res.users;
@@ -453,6 +459,7 @@ async function admLoadUsers(page = 1) {
 
     if (totalEl) totalEl.textContent = `${admNumFmt(res.total)} user${res.total === 1 ? '' : 's'} registered`;
     admRenderUsers(res.users);
+    if (typeof admLoadDeletionRequests === 'function') admLoadDeletionRequests();
     if (pagerEl) pagerEl.innerHTML = admBuildPager(res.page, res.pages, 'admLoadUsers');
   } catch (err) {
     if (admHandleAuthError(err)) return;
@@ -471,11 +478,11 @@ function admRenderUsers(users) {
 
   tbody.innerHTML = users.map(u => `
     <tr onclick="admOpenUserModal('${admEscape(u.id)}')">
-      <td><strong>${admEscape(u.username)}</strong></td>
-      <td style="font-family:monospace;font-size:12px;color:var(--adm-text-muted);">${admEscape(u.id.substring(0,8))}…</td>
-      <td>${u.is_active ? '<span class="adm-badge badge-active">Active</span>' : '<span class="adm-badge badge-inactive">Inactive</span>'}</td>
+      <td><strong>${admEscape(u.username)}</strong>${u.deletion_requested ? ' <span class="adm-badge badge-inactive" title="This user asked to delete their account">Deletion requested</span>' : ''}</td>
+      <td>${u.is_active ? '<span class="adm-badge badge-active">Active</span>' : '<span class="adm-badge badge-inactive">Suspended</span>'}</td>
       <td>${u.is_admin ? '<span class="adm-badge badge-admin">Admin</span>' : '<span class="adm-badge badge-user">User</span>'}</td>
       <td>${admDate(u.created_at)}</td>
+      <td>${admDatetime(u.last_active_at)}</td>
       <td>${admDatetime(u.last_login_at)}</td>
       <td><span class="adm-num-chip">${u.itinerary_count}</span></td>
     </tr>
@@ -503,7 +510,7 @@ async function admOpenUserModal(uid) {
         </div>
         <div class="adm-detail-item">
           <div class="adm-detail-label">Status</div>
-          <div class="adm-detail-value">${u.is_active ? '<span class="adm-badge badge-active">Active</span>' : '<span class="adm-badge badge-inactive">Inactive</span>'}</div>
+          <div class="adm-detail-value">${u.is_active ? '<span class="adm-badge badge-active">Active</span>' : '<span class="adm-badge badge-inactive">Suspended</span>'}</div>
         </div>
         <div class="adm-detail-item">
           <div class="adm-detail-label">Role</div>
@@ -517,10 +524,18 @@ async function admOpenUserModal(uid) {
           <div class="adm-detail-label">Last Login</div>
           <div class="adm-detail-value">${admDatetime(u.last_login_at)}</div>
         </div>
-        <div class="adm-detail-item" style="grid-column:1/-1;">
+        <div class="adm-detail-item">
+          <div class="adm-detail-label">Last active</div>
+          <div class="adm-detail-value">${admDatetime(u.last_active_at)}</div>
+        </div>
+        <div class="adm-detail-item">
           <div class="adm-detail-label">Saved Itineraries</div>
           <div class="adm-detail-value">${u.itinerary_count} itinerary record(s)</div>
         </div>
+        ${u.deletion_requested ? `<div class="adm-detail-item" style="grid-column:1/-1;">
+          <div class="adm-detail-label">Deletion request</div>
+          <div class="adm-detail-value">Asked on ${admDatetime(u.deletion_requested_at)}${u.deletion_reason ? ' — “' + admEscape(u.deletion_reason) + '”' : ''}</div>
+        </div>` : ''}
       </div>
 
       <div class="adm-modal-actions">
@@ -528,7 +543,7 @@ async function admOpenUserModal(uid) {
           class="adm-btn ${u.is_active ? 'adm-btn-danger' : 'adm-btn-primary'}"
           onclick="admToggleUserActive('${u.id}', ${!u.is_active})"
         >
-          ${u.is_active ? 'Deactivate User' : 'Activate User'}
+          ${u.is_active ? 'Suspend account' : 'Reactivate account'}
         </button>
 
         <button
@@ -538,12 +553,14 @@ async function admOpenUserModal(uid) {
           ${u.is_admin ? 'Revoke Admin Role' : 'Promote to Admin'}
         </button>
 
+        ${!u.is_admin ? `<button class="adm-btn adm-btn-ghost" onclick="admResetUserPassword('${u.id}', '${admEscape(u.username)}')">Reset password</button>` : ''}
+
         <button
           class="adm-btn adm-btn-danger"
           style="margin-left:auto;"
           onclick="admConfirmDeleteUser('${u.id}', '${admEscape(u.username)}')"
         >
-          Delete User
+          Delete account
         </button>
       </div>
     `;
@@ -563,7 +580,7 @@ async function admToggleUserActive(uid, newActive) {
       method: 'PATCH',
       body: JSON.stringify({ is_active: newActive }),
     });
-    admToast(`User ${newActive ? 'activated' : 'deactivated'}.`, 'success');
+    admToast(`Account ${newActive ? 'reactivated' : 'suspended'}.`, 'success');
     admCloseUserModal();
     admLoadUsers(admState.users.page);
   } catch (err) {

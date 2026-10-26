@@ -16,6 +16,7 @@ Enforces all validation rules:
 import asyncio
 import json
 import httpx
+from app.services.usage_service import usage_recorder
 from typing import List, Dict, Any, Optional, Set
 
 from app.config import settings
@@ -108,7 +109,9 @@ def _fetch_geoapify_places(
     }
     try:
         with httpx.Client(timeout=10.0) as client:
-            resp = client.get(_GEOAPIFY_PLACES_URL, params=params)
+            with usage_recorder.track("geoapify", "places") as _u:
+                resp = client.get(_GEOAPIFY_PLACES_URL, params=params)
+                _u.status = getattr(resp, "status_code", None)
             if resp.status_code == 400:
                 # Previously this silently returned an empty list here, which
                 # made every live search look like "no places found" with no

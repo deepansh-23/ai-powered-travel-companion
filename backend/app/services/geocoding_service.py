@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, List
 import json
 import urllib.parse
 import httpx
+from app.services.usage_service import usage_recorder
 
 from app.config import settings
 from app.models.places import Center
@@ -108,7 +109,9 @@ class GeocodingService:
 
         try:
             with httpx.Client(timeout=8.0) as client:
-                resp = client.get(url, params=params)
+                with usage_recorder.track("geoapify", "geocode") as _u:
+                    resp = client.get(url, params=params)
+                    _u.status = getattr(resp, "status_code", None)
                 if resp.status_code == 400:
                     raise RuntimeError(
                         f"Location service error (400). Please check your query or API key."

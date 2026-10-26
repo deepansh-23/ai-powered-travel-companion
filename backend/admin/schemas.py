@@ -27,7 +27,11 @@ class AdminUserItem(BaseModel):
     is_admin: bool
     created_at: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
+    last_active_at: Optional[datetime] = None
     itinerary_count: int = 0
+    deletion_requested: bool = False
+    deletion_requested_at: Optional[datetime] = None
+    deletion_reason: Optional[str] = None
 
 
 class AdminUsersResponse(BaseModel):
@@ -252,3 +256,25 @@ class DiagnosticsResponse(BaseModel):
     app_uptime_seconds: int
     server_time: str
 
+
+# ──────────────────────────── Password reset, deletion requests, analytics ─────
+
+class ResetPasswordResponse(BaseModel):
+    temporary_password: str
+    message: str
+
+
+class DeletionRequestItem(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    reason: str = ""
+    requested_at: Optional[datetime] = None
+    registered_at: Optional[datetime] = None
+    last_active_at: Optional[datetime] = None
+    is_admin: bool = False
+
+
+class DeletionRequestsResponse(BaseModel):
+    requests: List[DeletionRequestItem]
+    total: int

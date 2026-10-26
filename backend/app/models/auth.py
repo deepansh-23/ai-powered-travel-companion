@@ -34,6 +34,10 @@ class DeleteAccountRequest(BaseModel):
     password: str = Field("", max_length=300)
 
 
+class DeletionRequestBody(BaseModel):
+    reason: str = Field("", max_length=300)
+
+
 class GuestStartRequest(BaseModel):
     captcha_token: Optional[str] = None
 

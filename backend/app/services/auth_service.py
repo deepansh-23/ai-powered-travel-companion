@@ -20,7 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db_models import AuthSession, Feedback, History, LoginAttempt, SavedSession, User, utcnow
+from app.db_models import AccountDeletionRequest, AuthSession, Feedback, History, LoginAttempt, SavedSession, User, utcnow
 
 _hasher = PasswordHasher()
 _DUMMY_HASH = _hasher.hash("not-a-real-password-for-timing")
@@ -231,6 +231,7 @@ async def delete_account(db: AsyncSession, user: User, password: str) -> None:
         raise InvalidCredentials("Password is incorrect. Your account was not deleted.")
 
     uid, uname = user.id, user.username_lower
+    await db.execute(delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == uid))
     await db.execute(update(Feedback).where(Feedback.user_id == uid).values(user_id=None))
     await db.execute(delete(History).where(History.user_id == uid))
     await db.execute(delete(SavedSession).where(SavedSession.user_id == uid))
