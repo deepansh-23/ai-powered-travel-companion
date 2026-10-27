@@ -87,6 +87,7 @@ function usRender(d) {
       return `<tr><td>${admEscape(e.label)}</td><td>${usN(e.requests)}</td><td>${e.failed ? `<span class="adm-badge badge-inactive">${usN(e.failed)}</span>` : 0}</td><td>${usMs(e.avg_ms)}</td><td>${usMs(e.p95_ms)}</td><td>${quota}</td>
         <td>${e.endpoints.map(x => `<code>${admEscape(x.endpoint)}</code> × ${usN(x.requests)}`).join('<br>') || '—'}</td></tr>`;
     }).join(''), '');
+  usShowKeys(d.serpapi_keys || [], d.serpapi_switches || 0);
   const sa = d.serpapi_account;
   if (sa && sa.available) usShowSerp(sa);
 
@@ -97,10 +98,30 @@ function usRender(d) {
     'No failures since the server last started. (Recent failures are kept in memory only.)');
 }
 
+/** Which SerpApi key is serving searches right now (no key is ever shown, only its slot and state). */
+function usShowKeys(keys, switches) {
+  const box = document.getElementById('admUsSerpKeys');
+  if (!box) return;
+  if (!keys.length) { box.innerHTML = ''; return; }
+  const why = { quota: 'out of searches', rate: 'rate limited', invalid: 'rejected' };
+  const active = keys.find(k => k.state === 'ready');
+  box.innerHTML = `<b>SerpApi keys</b>` + keys.map(k => {
+    const state = k.state === 'ready'
+      ? (active && active.slot === k.slot ? '<span class="adm-badge badge-active">In use</span>' : '<span class="adm-badge badge-user">Ready (standby)</span>')
+      : `<span class="adm-badge badge-inactive">Resting: ${admEscape(why[k.reason] || 'problem')}, retried in ~${admEscape(k.resting_minutes)} min</span>`;
+    return `<span class="us-key">🔑 ${admEscape(k.label)} ${state}</span>`;
+  }).join('') + (keys.length < 2 ? '<span class="adm-set-desc">No backup key is set (SERP_API_KEY2).</span>' : '')
+    + (switches ? `<span class="adm-set-desc">Switched to the next key ${admEscape(switches)} time(s) since the server started.</span>` : '');
+}
+
 function usShowSerp(sa) {
   const out = document.getElementById('admUsSerpOut');
-  out.className = 'adm-set-status ' + (sa.left !== null && sa.searches_per_month && sa.left / sa.searches_per_month <= 0.2 ? 'err' : 'ok');
-  out.textContent = `${sa.plan ? sa.plan + ': ' : ''}${usN(sa.left)} of ${usN(sa.searches_per_month)} searches left this month (${usN(sa.used_this_month)} used)`;
+  const rows = (sa.keys && sa.keys.length) ? sa.keys : [sa];
+  const low = rows.some(r => r.available && r.left !== null && r.searches_per_month && r.left / r.searches_per_month <= 0.2);
+  out.className = 'adm-set-status ' + (low ? 'err' : 'ok');
+  out.innerHTML = rows.map(r => r.available
+    ? `${admEscape(r.label || 'Key')}: ${r.plan ? admEscape(r.plan) + ', ' : ''}${usN(r.left)} of ${usN(r.searches_per_month)} searches left (${usN(r.used_this_month)} used)`
+    : `${admEscape(r.label || 'Key')}: ${admEscape(r.message || 'not available')}`).join('<br>');
 }
 
 async function usSerpCheck() {
@@ -108,7 +129,7 @@ async function usSerpCheck() {
   out.className = 'adm-set-status'; out.textContent = 'Checking…';
   try {
     const sa = await admFetch(`${ADM_US_API}/serpapi-quota`, { method: 'POST' });
-    if (sa.available) { usShowSerp(sa); admLoadUsage(); }
+    if (sa.available || (sa.keys && sa.keys.length)) { usShowSerp(sa); if (sa.available) admLoadUsage(); }
     else { out.className = 'adm-set-status err'; out.textContent = sa.message || 'Not available.'; }
   } catch (err) {
     if (admHandleAuthError(err)) return;

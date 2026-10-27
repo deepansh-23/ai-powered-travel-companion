@@ -29,15 +29,19 @@ RATE_COOLDOWN_SECONDS = 600.0
 class SerpApiKeyProblem(RuntimeError):
     """The KEY (not the request) is the problem: out of searches, rate limited or rejected. Worth trying the backup key."""
 
-    def __init__(self, message: str, cooldown: float):
+    def __init__(self, message: str, cooldown: float, kind: str = "quota"):
         super().__init__(message)
         self.cooldown = cooldown
+        self.kind = kind          # quota (out of searches) | rate (rate limited) | invalid (key rejected)
 
 
 class SerpApiClient:
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._resting_until: Dict[str, float] = {}   # key fingerprint -> time before which it is skipped
+        self._resting_kind: Dict[str, str] = {}      # key fingerprint -> why it rests (quota / rate / invalid)
+        self.switch_count = 0                        # how many times a search had to move to the next key
+        self.last_switch_at: Optional[float] = None
 
     def _configured_keys(self) -> List[str]:
         """Usable keys in order of preference (main first, backup second). Placeholders and duplicates are ignored."""
@@ -57,6 +61,26 @@ class SerpApiClient:
     def _key_id(key: str) -> str:
         """A short fingerprint, so a key can be tracked without ever storing or logging the key itself."""
         return hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+
+    def key_status(self) -> List[Dict[str, Any]]:
+        """Safe summary of the configured keys for the admin dashboard: never contains a key, only slot and state."""
+        try:
+            keys = self._configured_keys()
+        except RuntimeError:
+            return []
+        now = time.time()
+        out = []
+        for slot, key in enumerate(keys, start=1):
+            kid = self._key_id(key)
+            until = self._resting_until.get(kid, 0.0)
+            resting = until > now
+            out.append({
+                "slot": slot, "label": "Main key" if slot == 1 else "Backup key",
+                "state": "resting" if resting else "ready",
+                "reason": self._resting_kind.get(kid) if resting else None,
+                "resting_minutes": int((until - now) // 60) + 1 if resting else 0,
+            })
+        return out
 
     def _keys_to_try(self) -> List[str]:
         """Keys not resting after a failure, in order. If every key is resting, try them all again."""
@@ -103,7 +127,10 @@ class SerpApiClient:
             except SerpApiKeyProblem as exc:
                 last_problem = exc
                 self._resting_until[self._key_id(api_key)] = time.time() + exc.cooldown
+                self._resting_kind[self._key_id(api_key)] = exc.kind
                 if slot < len(keys):
+                    self.switch_count += 1
+                    self.last_switch_at = time.time()
                     logger.warning("SerpApi key #%d is out of searches or was rejected (%s); switching to the backup key.", slot, exc)
                 else:
                     logger.error("SerpApi: every configured key is out of searches or was rejected (%s).", exc)
@@ -121,9 +148,9 @@ class SerpApiClient:
                     _u.status = getattr(response, "status_code", None)
 
                 if response.status_code == 401 or response.status_code == 403:
-                    raise SerpApiKeyProblem("Invalid SERPAPI_API_KEY: authentication failed with SerpApi.", QUOTA_COOLDOWN_SECONDS)
+                    raise SerpApiKeyProblem("Invalid SERPAPI_API_KEY: authentication failed with SerpApi.", QUOTA_COOLDOWN_SECONDS, "invalid")
                 elif response.status_code == 429:
-                    raise SerpApiKeyProblem("SerpApi search quota exceeded or rate limit reached.", RATE_COOLDOWN_SECONDS)
+                    raise SerpApiKeyProblem("SerpApi search quota exceeded or rate limit reached.", RATE_COOLDOWN_SECONDS, "rate")
                 elif response.status_code >= 500:
                     raise RuntimeError(f"SerpApi provider service error (HTTP {response.status_code}).")
 
@@ -136,11 +163,11 @@ class SerpApiClient:
                 if "error" in data:
                     err_msg = str(data["error"]).lower()
                     if "api key" in err_msg or "unauthorized" in err_msg:
-                        raise SerpApiKeyProblem(f"Invalid SERPAPI_API_KEY: {data['error']}", QUOTA_COOLDOWN_SECONDS)
+                        raise SerpApiKeyProblem(f"Invalid SERPAPI_API_KEY: {data['error']}", QUOTA_COOLDOWN_SECONDS, "invalid")
                     elif "invalid" in err_msg:
                         raise RuntimeError(f"Invalid SERPAPI_API_KEY: {data['error']}")   # a bad request, not a key problem
                     elif "quota" in err_msg or "searches" in err_msg or "limit" in err_msg:
-                        raise SerpApiKeyProblem(f"SerpApi quota exhausted: {data['error']}", QUOTA_COOLDOWN_SECONDS)
+                        raise SerpApiKeyProblem(f"SerpApi quota exhausted: {data['error']}", QUOTA_COOLDOWN_SECONDS, "quota")
                     else:
                         raise RuntimeError(f"SerpApi error: {data['error']}")
 

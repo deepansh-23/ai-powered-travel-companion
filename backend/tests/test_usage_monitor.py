@@ -228,7 +228,7 @@ async def test_serpapi_account_check_is_safe_without_a_key_and_parses_the_answer
     monkeypatch.setattr(settings, "SERPAPI_API_KEY", "real-looking-key-123")
     monkeypatch.setattr(usage_report.httpx, "AsyncClient", Client)
     out = await usage_report.serpapi_account(force=True)
-    assert out["available"] and out["left"] == 10 and "key" not in str(out).lower().replace("searches", "")
+    assert out["available"] and out["left"] == 10 and "real-looking-key-123" not in str(out)
     admin = await _admin()
     async with admin() as c:
         alerts = (await c.get("/api/admin/usage")).json()["alerts"]

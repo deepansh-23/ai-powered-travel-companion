@@ -122,3 +122,6 @@
 .us-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .us-field small { color: var(--adm-text-muted); font-size: 11.5px; }
 .us-price { width: 110px; }
+
+.us-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; font-size: 13px; }
+.us-key { display: inline-flex; align-items: center; gap: 6px; }

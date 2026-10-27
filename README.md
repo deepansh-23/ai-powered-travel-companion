@@ -121,7 +121,8 @@ Every call to the Gemini model and to the external APIs is counted with its mode
 - **Spend is an estimate.** It uses editable list prices per model (USD per 1 million tokens). Models without a price get no estimate, and a free tier may cost nothing.
 - **Limits are alerts, not blocks.** Set your plan sizes (AI requests per day, spend per month, SerpApi searches per month, Geoapify and RailRadar requests per day, calls per hour). The page warns at 80% and flags 100%. Visitors are never blocked.
 - **Other alerts:** unusually high traffic compared with the last two weeks, a service failing often today, and provider rate or quota refusals (HTTP 429).
-- **SerpApi quota:** the "Check SerpApi searches left" button reads your remaining searches from SerpApi's free account endpoint.
+- **SerpApi keys:** the page shows which key is serving searches (main or backup, set with `SERPAPI_API_KEY` and `SERP_API_KEY2`) and warns when the backup key is in use or when no key is working. Keys themselves are never shown.
+- **SerpApi quota:** the "Check SerpApi searches left" button reads the remaining searches of each key from SerpApi's free account endpoint.
 - Recent failures are kept in memory only and reset when the server restarts.
 
 ### Account controls

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db_models import ApiUsageDaily, AppSetting
+from app.services.serpapi_client import serpapi_client
 from app.services.usage_service import AI_PROVIDER, scrub, today, usage_recorder
 
 logger = logging.getLogger(__name__)
@@ -151,31 +152,51 @@ def cost_usd(model: str, tin: int, tout: int, prices: Dict[str, Tuple[float, flo
 _serp_cache: Tuple[float, Dict[str, Any]] = (0.0, {})
 
 
-async def serpapi_account(force: bool = False) -> Dict[str, Any]:
-    """Free account endpoint of SerpApi (does not use a search). Cached for 10 minutes. Never returns the key."""
-    global _serp_cache
-    if not force and _serp_cache[1] and time.time() - _serp_cache[0] < 600:
-        return _serp_cache[1]
-    key = (getattr(settings, "SERPAPI_API_KEY", "") or "").strip()
-    if not key or key == "your_serpapi_api_key_here":
-        return {"available": False, "message": "SERPAPI_API_KEY is not configured."}
+async def _account_for(key: str) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get("https://serpapi.com/account", params={"api_key": key})
         if resp.status_code != 200:
             return {"available": False, "message": f"SerpApi account check failed (HTTP {resp.status_code})."}
         d = resp.json()
-        out = {
+        return {
             "available": True,
             "plan": d.get("plan_name") or d.get("plan_id"),
             "searches_per_month": d.get("searches_per_month"),
             "used_this_month": d.get("this_month_usage"),
             "left": d.get("total_searches_left", d.get("plan_searches_left")),
-            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
         return {"available": False, "message": "SerpApi account check failed: " + scrub(exc, 120)}
-    _serp_cache = (time.time(), out)
+
+
+async def serpapi_account(force: bool = False) -> Dict[str, Any]:
+    """Asks SerpApi how many searches each configured key has left (its free account endpoint; costs no search).
+
+    Cached for 10 minutes. Never returns a key. The first key's numbers are also given at the top level, so the
+    result keeps its earlier shape; `keys` lists every key (main, then backup).
+    """
+    global _serp_cache
+    if not force and _serp_cache[1] and time.time() - _serp_cache[0] < 600:
+        return _serp_cache[1]
+    try:
+        keys = serpapi_client._configured_keys()
+    except RuntimeError:
+        return {"available": False, "message": "SERPAPI_API_KEY is not configured.", "keys": []}
+    checked_at = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for slot, key in enumerate(keys, start=1):
+        r = await _account_for(key)
+        r.update({"slot": slot, "label": "Main key" if slot == 1 else "Backup key", "checked_at": checked_at})
+        rows.append(r)
+    out = {"available": any(r["available"] for r in rows), "keys": rows, "checked_at": checked_at}
+    first = rows[0]
+    if first["available"]:
+        out.update({k: first.get(k) for k in ("plan", "searches_per_month", "used_this_month", "left")})
+    else:
+        out["message"] = first.get("message")
+    if out["available"]:
+        _serp_cache = (time.time(), out)
     return out
 
 
@@ -303,13 +324,33 @@ async def build_usage(db: AsyncSession, start: date, end: date) -> Dict[str, Any
         _pct_alert(alerts, PROVIDER_LABELS[prov], used, limits[key], "", f"per {period}")
 
     serp = _serp_cache[1] if _serp_cache[1] else None
-    if serp and serp.get("available") and serp.get("searches_per_month") and serp.get("left") is not None:
-        left_pct = serp["left"] / serp["searches_per_month"] * 100
-        if left_pct <= 5:
-            alerts.append(_alert("critical", "SerpApi searches almost gone", f"{serp['left']} of {serp['searches_per_month']} searches left this month."))
-        elif left_pct <= 20:
-            alerts.append(_alert("warning", "SerpApi searches running low", f"{serp['left']} of {serp['searches_per_month']} searches left this month."))
+    for k in (serp or {}).get("keys", []):
+        if k.get("available") and k.get("searches_per_month") and k.get("left") is not None:
+            left_pct = k["left"] / k["searches_per_month"] * 100
+            msg = f"{k['label']}: {k['left']} of {k['searches_per_month']} searches left this month."
+            if left_pct <= 5:
+                alerts.append(_alert("critical", f"SerpApi {k['label'].lower()}: searches almost gone", msg))
+            elif left_pct <= 20:
+                alerts.append(_alert("warning", f"SerpApi {k['label'].lower()}: searches running low", msg))
 
+    # which SerpApi key is serving searches right now
+    key_state = serpapi_client.key_status()
+    why = {"quota": "it ran out of searches", "rate": "it was rate limited", "invalid": "it was rejected"}
+    if key_state:
+        resting = [k for k in key_state if k["state"] == "resting"]
+        if len(resting) == len(key_state):
+            names = " and ".join(k["label"].lower() for k in key_state)
+            alerts.append(_alert("critical", "SerpApi: no key is working" if len(key_state) > 1 else "SerpApi key is exhausted",
+                                 f"The {names} {'are' if len(key_state) > 1 else 'is'} out of searches or rejected, so flight and hotel searches are failing. "
+                                 "Add searches to a plan or replace a key."))
+        elif key_state[0]["state"] == "resting" and len(key_state) > 1:
+            m = key_state[0]
+            alerts.append(_alert("warning", "SerpApi backup key is in use",
+                                 f"The main key stopped working ({why.get(m['reason'], 'a problem')}), so searches now use the backup key. "
+                                 f"The main key is tried again in about {m['resting_minutes']} min. Check your SerpApi plan."))
+        elif any(k["state"] == "resting" for k in key_state[1:]):
+            m = next(k for k in key_state[1:] if k["state"] == "resting")
+            alerts.append(_alert("info", "SerpApi backup key is resting", f"The backup key stopped working ({why.get(m['reason'], 'a problem')}). The main key is serving searches."))
     # unusual traffic: today against the average of the previous days that have data
     prev: Dict[date, int] = defaultdict(int)
     for r in rows:
@@ -345,6 +386,7 @@ async def build_usage(db: AsyncSession, start: date, end: date) -> Dict[str, Any
         "start": start.isoformat(), "end": end.isoformat(), "tracking_started": first_day.isoformat() if first_day else None,
         "summary": summary, "by_model": by_model, "by_feature": by_feature, "external": external, "series": series,
         "recent_failures": list(usage_recorder.failures)[:40], "alerts": alerts,
-        "limits": limits, "serpapi_account": serp,
+        "limits": limits, "serpapi_account": serp, "serpapi_keys": key_state,
+        "serpapi_switches": serpapi_client.switch_count,
         "today": {"requests": total_today, "ai_requests": n(ai_today), "last_hour": last_hour, "month_ai_cost_usd": round(month_cost, 4)},
     }
