@@ -21,6 +21,7 @@
 
 /* Mobile Breakpoint (max-width: 768px) */
 @media (max-width: 768px) {
+
   /* Navbar */
   .nav-links {
     display: none;
@@ -42,7 +43,11 @@
     border-radius: var(--radius-lg);
   }
 
-  .features-grid, .steps-grid, .area-sections-grid, .pro-con-grid, .itinerary-grid-form {
+  .features-grid,
+  .steps-grid,
+  .area-sections-grid,
+  .pro-con-grid,
+  .itinerary-grid-form {
     grid-template-columns: 1fr;
   }
 
@@ -66,7 +71,8 @@
   }
 
   .btn {
-    min-height: 44px; /* Touch target minimum */
+    min-height: 44px;
+    /* Touch target minimum */
   }
 
   /* Filter chips scroll smoothly inside their container without page overflow */
@@ -128,35 +134,646 @@
    Larger text needs the compact (menu) navigation a little earlier,
    so labels never wrap onto two lines.
    ========================================================================== */
-.nav-link, .nav-dropdown-btn, .brand-link { white-space: nowrap; }
+.nav-link,
+.nav-dropdown-btn,
+.brand-link {
+  white-space: nowrap;
+}
 
 @media (max-width: 1060px) {
-  .nav-links { display: none; }
-  .mobile-nav-toggle { display: inline-flex; }
+  .nav-links {
+    display: none;
+  }
+
+  .mobile-nav-toggle {
+    display: inline-flex;
+  }
 }
 
 /* ==========================================================================
    Phone-width fixes for the larger text (nothing may scroll sideways)
    ========================================================================== */
-.app-wrapper, .main-content { min-width: 0; }
-.planner-steps-bar { max-width: 100%; min-width: 0; }
-.history-filter-bar { flex-wrap: wrap; }
-.location-btn-group { flex-wrap: wrap; }
-.navbar-inner, .navbar-actions { min-width: 0; }
+.app-wrapper,
+.main-content {
+  min-width: 0;
+}
+
+.planner-steps-bar {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.history-filter-bar {
+  flex-wrap: wrap;
+}
+
+.location-btn-group {
+  flex-wrap: wrap;
+}
+
+.navbar-inner,
+.navbar-actions {
+  min-width: 0;
+}
 
 @media (max-width: 480px) {
-  .brand-link { font-size: 1rem; gap: 6px; }
-  .navbar-actions { gap: 8px; }
-  .theme-dropdown { max-width: 118px; font-size: 0.75rem; padding: 6px 6px; }
-  .location-btn-group .btn { flex: 1 1 45%; }
+  .brand-link {
+    font-size: 1rem;
+    gap: 6px;
+  }
+
+  .navbar-actions {
+    gap: 8px;
+  }
+
+  .theme-dropdown {
+    max-width: 118px;
+    font-size: 0.75rem;
+    padding: 6px 6px;
+  }
+
+  .location-btn-group .btn {
+    flex: 1 1 45%;
+  }
 }
 
 /* Grid children may shrink below their content width (prevents sideways scroll) */
-.itinerary-grid-form > * { min-width: 0; }
+.itinerary-grid-form>* {
+  min-width: 0;
+}
+
 @media (max-width: 768px) {
-  .itinerary-grid-form { grid-template-columns: minmax(0, 1fr); }
+  .itinerary-grid-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 480px) {
-  .btn { white-space: normal; text-align: center; max-width: 100%; }
+  .btn {
+    white-space: normal;
+    text-align: center;
+    max-width: 100%;
+  }
+}
+
+
+/* ==========================================================================
+   MOBILE COMPATIBILITY LAYER  (added - everything above is unchanged)
+   Phones and small tablets only. Desktop layout is not affected: every rule
+   below sits inside a max-width media query, except a few harmless safety
+   rules that only stop things from overflowing.
+   ========================================================================== */
+
+/* ---- Safety rules: nothing may be wider than the screen ---------------- */
+img,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
+}
+
+.main-content,
+.app-wrapper {
+  overflow-wrap: break-word;
+}
+
+.place-card,
+.hotel-card,
+.transport-option-card,
+.itinerary-day-card,
+.itinerary-overview-card,
+.area-section-card,
+.review-card,
+.history-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card-title-group {
+  min-width: 0;
+}
+
+button,
+a,
+.select-chip,
+.filter-chip,
+.mode-chip,
+.date-chip {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fare-avail,
+.qv-card,
+.stay-transfers {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filter-chips-container,
+.date-chip-row,
+.glance-route,
+.dayflow,
+.planner-steps-bar {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* ---- Tablets and large phones (up to 768px) ---------------------------- */
+@media (max-width: 768px) {
+
+  /* Use the real visible height on phones (address bar shows/hides) */
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .app-wrapper {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Menu drawer: full visible height, scrolls on its own, clear of the home bar */
+  .mobile-drawer {
+    padding: var(--space-md);
+    gap: 6px;
+    overscroll-behavior: contain;
+    padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-drawer .nav-link {
+    min-height: 48px;
+  }
+
+  /* Modals */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-dialog {
+    max-height: 90vh;
+    max-height: 90dvh;
+  }
+
+  .modal-header {
+    padding: var(--space-md);
+  }
+
+  .modal-body {
+    padding: var(--space-md);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-footer {
+    padding: var(--space-sm) var(--space-md);
+    flex-wrap: wrap;
+  }
+
+  /* Floating review panel never taller than the screen */
+  .review-panel {
+    max-height: calc(100vh - 170px);
+    max-height: calc(100dvh - 170px);
+  }
+
+  /* Toasts: full width at the bottom instead of a fixed 280px box */
+  .toast-container {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    align-items: stretch;
+  }
+
+  .toast {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  /* Roomier cards become compact cards */
+  .itinerary-form-card,
+  .itinerary-overview-card,
+  .itinerary-day-card,
+  .area-hero-summary {
+    padding: var(--space-lg) var(--space-md);
+    border-radius: var(--radius-lg);
+  }
+
+  .place-card {
+    padding: var(--space-md);
+  }
+
+  .feature-card {
+    padding: var(--space-lg);
+  }
+
+  .hero-section {
+    padding: var(--space-xl) 0;
+  }
+
+  .hero-subtitle {
+    font-size: 1.05rem;
+    margin-bottom: var(--space-lg);
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions .btn {
+    width: 100%;
+  }
+
+  .info-section {
+    padding: var(--space-xl) 0;
+  }
+
+  .features-grid {
+    margin: var(--space-xl) 0;
+  }
+
+  .features-grid>* {
+    grid-column: 1 / -1;
+  }
+
+  .itinerary-grid-form>* {
+    grid-column: 1 / -1;
+  }
+
+  /* Headers of cards and rows wrap instead of squeezing */
+  .day-header,
+  .card-header-row,
+  .transport-card-header,
+  .stay-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .explorer-results-header {
+    align-items: flex-start;
+  }
+
+  .results-heading-group {
+    flex-wrap: wrap;
+  }
+
+  .footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer-links {
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-md);
+  }
+
+  /* Easy to tap */
+  .select-chip,
+  .mode-chip,
+  .scope-chip,
+  .train-class-opt {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .filter-chip {
+    min-height: 42px;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  /* 16px stops iOS zooming into fields */
+  .theme-dropdown {
+    font-size: 16px;
+    min-height: 40px;
+  }
+
+  .btn-sm {
+    min-height: 40px;
+  }
+
+  .transfer-tab {
+    padding: 12px 14px;
+  }
+
+  .transfer-option-side {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .transport-options-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Maps */
+  .trip-map-canvas {
+    height: 300px;
+  }
+
+  .day-map-canvas {
+    height: 280px;
+  }
+
+  .map-legend {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    max-width: calc(100% - 72px);
+    padding: 6px 10px;
+    font-size: 0.72rem;
+  }
+
+  .map-control-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .maplibregl-popup-content {
+    max-width: 220px;
+  }
+
+  /* Tables inside results never push the page sideways */
+  .qv-table {
+    font-size: 0.95rem;
+  }
+
+  .qv-when {
+    width: 74px;
+  }
+
+  .fare-avail-table {
+    min-width: 420px;
+  }
+}
+
+/* ---- Phones (up to 480px) ---------------------------------------------- */
+@media (max-width: 480px) {
+  .main-content {
+    padding: var(--space-md) 12px;
+  }
+
+  /* Header: logo text shortens with "..." instead of wrapping or overflowing */
+  .navbar-inner {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .brand-link {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .brand-text {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .brand-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .navbar-actions {
+    flex-shrink: 0;
+  }
+
+  .auth-nav {
+    gap: 6px;
+  }
+
+  .page-header {
+    margin-bottom: var(--space-lg);
+  }
+
+  .page-header .page-description {
+    font-size: 0.98rem;
+  }
+
+  .hero-title {
+    font-size: 1.9rem;
+  }
+
+  .itinerary-form-card,
+  .itinerary-overview-card,
+  .itinerary-day-card,
+  .area-hero-summary {
+    padding: var(--space-md) 14px;
+  }
+
+  .itinerary-grid-form {
+    gap: var(--space-md);
+  }
+
+  /* Chips and badges a little tighter so more fit per line */
+  .select-chip {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+  }
+
+  .planner-step-badge {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  .quick-facts-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Hotel / transport / stay cards */
+  .transport-timing-row {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .transport-place-val {
+    max-width: 72px;
+  }
+
+  .stay-block {
+    padding: 12px;
+  }
+
+  .stay-actions {
+    width: 100%;
+  }
+
+  .stay-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .quick-cta .btn,
+  .itinerary-bottom-actions .btn,
+  .qv-actions .btn,
+  .auth-code-actions .btn,
+  .draft-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .draft-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .train-pick-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .glance-node {
+    min-width: 84px;
+  }
+
+  .trip-glance {
+    padding: 14px;
+  }
+
+  .budget-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .budget-tile-value {
+    font-size: 1.15rem;
+  }
+
+  /* Buttons that sit in a row at the bottom of forms */
+  #step4Section [style*="justify-content:space-between"],
+  #step3Section [style*="justify-content:space-between"],
+  .itinerary-grid-form [style*="justify-content:space-between"] {
+    flex-wrap: wrap;
+  }
+
+  #step4Section [style*="justify-content:space-between"]>.btn,
+  #step3Section [style*="justify-content:space-between"]>.btn {
+    flex: 1 1 100%;
+  }
+
+  /* Budget amount box and slider labels fit a narrow screen */
+  .budget-input-wrapper input {
+    width: 110px !important;
+  }
+
+  .budget-slider-wrapper {
+    gap: 8px !important;
+  }
+
+  /* Sign-in / security check dialogs */
+  .modal-body[style*="padding:28px 24px"] {
+    padding: 20px 12px !important;
+  }
+
+  #captchaWidgetContainer {
+    justify-content: safe center !important;
+    overflow-x: auto;
+  }
+
+  /* Floating review button stays small and out of the way */
+  .review-tab {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+
+  .review-panel {
+    right: 8px;
+    width: calc(100vw - 16px);
+  }
+
+  .trip-map-canvas {
+    height: 260px;
+  }
+
+  .day-map-canvas {
+    height: 250px;
+  }
+}
+
+/* ---- Very small phones (up to 360px) ----------------------------------- */
+@media (max-width: 360px) {
+  .brand-link svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .theme-dropdown {
+    max-width: 96px;
+    padding: 6px 4px;
+  }
+
+  .hero-title {
+    font-size: 1.7rem;
+  }
+
+  .welcome-card {
+    padding: 24px 14px 18px;
+  }
+
+  .welcome-title {
+    font-size: 1.3rem;
+  }
+
+  .date-chip {
+    flex-basis: 84px;
+    min-width: 84px;
+  }
+
+  .quick-facts-row,
+  .budget-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Phones turned sideways: keep the menu and dialogs usable ---------- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .mobile-drawer {
+    gap: 2px;
+  }
+
+  .mobile-drawer .nav-link {
+    min-height: 40px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .modal-dialog {
+    max-height: 94vh;
+    max-height: 94dvh;
+  }
+
+  .review-panel {
+    top: 70px;
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
+  }
+
+  .review-tab {
+    top: 70px;
+  }
+
+  .map-container {
+    height: 70vh;
+  }
+}
+
+/* ---- Touch screens: no hover-only behaviour needed --------------------- */
+@media (hover: none) {
+
+  .place-card:hover,
+  .feature-card:hover,
+  .hotel-card:hover,
+  .transport-option-card:hover,
+  .date-chip:hover:not(:disabled) {
+    transform: none;
+  }
 }
