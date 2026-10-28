@@ -339,6 +339,135 @@ class AIService:
   # Live Itinerary Generation
   # -----------------------------------------------------------------------
 
+  # --- helpers for planning long trips in parts ---------------------------------------------
+  @staticmethod
+  def _day_chunks(total: int, size: int = 4) -> List[tuple]:
+    """(first, last) day numbers per AI request. Up to 4 days is one request, exactly as before. Longer trips are
+    planned in parts of at most 4 days, because one huge answer gets cut off and silently loses days."""
+    if total <= size:
+      return [(1, total)]
+    parts = -(-total // size)
+    base, extra = divmod(total, parts)
+    out, start = [], 1
+    for i in range(parts):
+      n = base + (1 if i < extra else 0)
+      out.append((start, start + n - 1))
+      start += n
+    return out
+
+  @staticmethod
+  def _runs_of(numbers: List[int]) -> List[List[int]]:
+    """Groups sorted day numbers into consecutive runs of at most 4: [1,2,3,7] -> [[1,2,3],[7]]."""
+    runs: List[List[int]] = []
+    for n in numbers:
+      if runs and n == runs[-1][-1] + 1 and len(runs[-1]) < 4:
+        runs[-1].append(n)
+      else:
+        runs.append([n])
+    return runs
+
+  @staticmethod
+  def _parse_ai_json(raw_text: str) -> Dict[str, Any]:
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
+    try:
+      data = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+      raise RuntimeError(f"The AI service returned an unexpected response format. ({exc})")
+    if not isinstance(data, dict):
+      raise RuntimeError("The AI service returned an unexpected response format.")
+    return data
+
+  def _build_day(self, d: Dict[str, Any], number: int, schedule: List[str], daily_total: int) -> ItineraryDay:
+    # Websites are added later from real place data only; an AI-written address could be invented.
+    for key in ("morning", "afternoon", "evening"):
+      for place in ((d.get(key) or {}).get("places") or []):
+        if isinstance(place, dict):
+          place.pop("website", None)
+    for key in ("food_stop_lunch", "food_stop_dinner"):
+      if isinstance(d.get(key), dict):
+        d[key].pop("website", None)
+    return ItineraryDay(
+            day_number=number,
+            theme=d.get("theme", "Exploration"),
+            area=d.get("area") or (schedule[number - 1] if number - 1 < len(schedule) else None),
+            estimated_day_cost=d.get(
+                "estimated_day_cost", f"₹{daily_total:,} estimate"
+            ),
+            morning=ItinerarySegment(**d["morning"])
+            if "morning" in d
+            else ItinerarySegment(
+                time_window="08:00 AM – 12:00 PM",
+                title="Morning",
+                description="Explore local landmarks.",
+                places=[],
+            ),
+            food_stop_lunch=FoodStop(**d["food_stop_lunch"])
+            if "food_stop_lunch" in d
+            else FoodStop(
+                name="Local Lunch Spot",
+                cuisine="Local Cuisine",
+                recommendation="Try regional specialties.",
+                price_level="₹₹",
+            ),
+            afternoon=ItinerarySegment(**d["afternoon"])
+            if "afternoon" in d
+            else ItinerarySegment(
+                time_window="12:30 PM – 04:30 PM",
+                title="Afternoon",
+                description="Continue sightseeing.",
+                places=[],
+            ),
+            food_stop_dinner=FoodStop(**d["food_stop_dinner"])
+            if "food_stop_dinner" in d
+            else FoodStop(
+                name="Local Dinner Spot",
+                cuisine="Local Cuisine",
+                recommendation="Enjoy local evening delicacies.",
+                price_level="₹₹",
+            ),
+            evening=ItinerarySegment(**d["evening"])
+            if "evening" in d
+            else ItinerarySegment(
+                time_window="05:00 PM – 08:30 PM",
+                title="Evening",
+                description="Explore local markets.",
+                places=[],
+            ),
+        )
+
+  def _days_from_ai(self, parsed: Dict[str, Any], first: int, last: int, schedule: List[str], daily_total: int) -> Dict[int, ItineraryDay]:
+    """Maps the AI's days to day numbers first..last. The AI's own day_number is used when it is in range and not
+    taken, otherwise the next free number, so a skipped or repeated number cannot shift or drop days."""
+    out: Dict[int, ItineraryDay] = {}
+    for d in parsed.get("days", []) or []:
+      if not isinstance(d, dict):
+        continue
+      wanted = d.get("day_number")
+      if not (isinstance(wanted, int) and first <= wanted <= last and wanted not in out):
+        wanted = next((n for n in range(first, last + 1) if n not in out), None)
+      if wanted is None:
+        continue
+      try:
+        out[wanted] = self._build_day(d, wanted, schedule, daily_total)
+      except Exception:
+        continue
+    return out
+
+  def _free_day(self, number: int, schedule: List[str], daily_total: int) -> ItineraryDay:
+    """A plain, honest day used only when the AI could not plan this day after a retry."""
+    return ItineraryDay(
+        day_number=number, theme="Free day", area=(schedule[number - 1] if number - 1 < len(schedule) else None),
+        estimated_day_cost=f"₹{daily_total:,} estimate",
+        morning=ItinerarySegment(time_window="09:00 AM – 12:00 PM", title="Free morning",
+                                 description="Nothing fixed for this part of the day. Revisit a favourite place, wander on foot or rest.", places=[]),
+        food_stop_lunch=FoodStop(name="Lunch near your hotel", cuisine="Local Cuisine", recommendation="Ask your hotel for a good place nearby.", price_level="₹₹"),
+        afternoon=ItinerarySegment(time_window="12:30 PM – 04:30 PM", title="Free afternoon",
+                                   description="Plan this part yourself, or try 'Places Near You' for ideas close to your hotel.", places=[]),
+        food_stop_dinner=FoodStop(name="Dinner near your hotel", cuisine="Local Cuisine", recommendation="Ask your hotel for a good place nearby.", price_level="₹₹"),
+        evening=ItinerarySegment(time_window="05:00 PM – 08:30 PM", title="Free evening",
+                                 description="An easy evening. Eat, rest and enjoy the city.", places=[]),
+    )
+
   async def _generate_live_itinerary(
       self,
       req: ItineraryRequest,
@@ -393,8 +522,9 @@ class AIService:
     else:
       area_block = ""
 
-    prompt = f"""Generate an exceptionally detailed {req.duration_days}-day travel itinerary for:
-
+    def build_prompt(chunk_block: str, places_json: str, area_block: str, transport_prompt_block: str) -> str:
+      return f"""Generate an exceptionally detailed {req.duration_days}-day travel itinerary for:
+{chunk_block}
 DESTINATION: {dest_name}
 ORIGIN / SOURCE: {req.source or 'Not specified'}
 TRAVELLERS: {travelers} ({req.travel_group_type})
@@ -494,73 +624,90 @@ OUTPUT FORMAT — Respond ONLY with valid JSON (no markdown wrappers):
   "disclaimer": "All costs are estimates. Verify opening hours locally."
 }}"""
 
-    raw_text = await asyncio.to_thread(self._generate_with_fallback, prompt)
-    cleaned_text = re.sub(
-        r"^```(?:json)?\s*|\s*```$", "", raw_text, flags=re.MULTILINE
-    ).strip()
+    total_days = req.duration_days
+    chunks = self._day_chunks(total_days)
+    pool = list(verified_places or [])
+    windows_lines = window_prompt_lines(windows, total_days)
 
-    try:
-      parsed = json.loads(cleaned_text)
-    except json.JSONDecodeError as exc:
-      raise RuntimeError(
-          f"The AI service returned an unexpected response format. ({exc})"
+    def area_block_for(first: int, last: int) -> str:
+      if not schedule:
+        return ""
+      lines = "\n".join(f"Day {i}: {schedule[i - 1]}" for i in range(first, last + 1) if i - 1 < len(schedule))
+      return (
+          "\nAREA SCHEDULE (the traveller stays in several places, so plan every day ONLY inside its area):\n"
+          f"{lines}\n"
+          "RULES: use only verified places whose \"area\" matches that day's area. On the first day in a new area, "
+          "start with the transfer from the previous area (check out, travel, check in) and keep that day lighter. "
+          "Keep each day's sights close together so travelling time stays low. Set \"area\" on every day.\n"
       )
 
-    days_data = parsed.get("days", [])
-    days: List[ItineraryDay] = []
-    for d in days_data:
-      try:
-        day = ItineraryDay(
-            day_number=d.get("day_number", len(days) + 1),
-            theme=d.get("theme", "Exploration"),
-            area=d.get("area") or (schedule[len(days)] if len(days) < len(schedule) else None),
-            estimated_day_cost=d.get(
-                "estimated_day_cost", f"₹{daily_total:,} estimate"
-            ),
-            morning=ItinerarySegment(**d["morning"])
-            if "morning" in d
-            else ItinerarySegment(
-                time_window="08:00 AM – 12:00 PM",
-                title="Morning",
-                description="Explore local landmarks.",
-                places=[],
-            ),
-            food_stop_lunch=FoodStop(**d["food_stop_lunch"])
-            if "food_stop_lunch" in d
-            else FoodStop(
-                name="Local Lunch Spot",
-                cuisine="Local Cuisine",
-                recommendation="Try regional specialties.",
-                price_level="₹₹",
-            ),
-            afternoon=ItinerarySegment(**d["afternoon"])
-            if "afternoon" in d
-            else ItinerarySegment(
-                time_window="12:30 PM – 04:30 PM",
-                title="Afternoon",
-                description="Continue sightseeing.",
-                places=[],
-            ),
-            food_stop_dinner=FoodStop(**d["food_stop_dinner"])
-            if "food_stop_dinner" in d
-            else FoodStop(
-                name="Local Dinner Spot",
-                cuisine="Local Cuisine",
-                recommendation="Enjoy local evening delicacies.",
-                price_level="₹₹",
-            ),
-            evening=ItinerarySegment(**d["evening"])
-            if "evening" in d
-            else ItinerarySegment(
-                time_window="05:00 PM – 08:30 PM",
-                title="Evening",
-                description="Explore local markets.",
-                places=[],
-            ),
+    async def plan_days(first: int, last: int, part: int = 1, parts: int = 1, repair: bool = False):
+      """Asks the AI for days first..last only. Returns (parsed JSON or None, {day_number: ItineraryDay}, error)."""
+      if parts == 1 and not repair:
+        chunk_block, places_for, area_for, transport_for = "", places_json, area_block, transport_prompt_block
+      elif repair:
+        chunk_block = (
+            f"\nWrite ONLY days {first} to {last} of the {total_days}-day trip (the other days are already planned). The \"days\" "
+            f"array must hold exactly {last - first + 1} entries, with day_number {first} to {last}, in order.\n"
         )
-        days.append(day)
-      except Exception:
-        continue
+        places_for = places_json
+        area_for = area_block_for(first, last)
+        transport_for = "\n".join(
+            ln for ln in windows_lines
+            if not (ln.startswith("- DAY 1") and first != 1) and not (ln.startswith("- LAST DAY") and last != total_days))
+      else:
+        chunk_block = (
+            f"\nTHIS IS PART {part} OF {parts}. Write ONLY days {first} to {last} of the {total_days}-day trip (the other days are "
+            f"planned separately). The \"days\" array must hold exactly {last - first + 1} entries, with day_number {first} to {last}, "
+            "in order. Places marked priority \"primary\" are reserved for these days: use them first and only fall back to "
+            "\"backup\" places when you run out, so that days planned elsewhere do not repeat the same places.\n"
+        )
+        areas_here = {schedule[i - 1] for i in range(first, last + 1) if i - 1 < len(schedule)}
+        tagged = []
+        for idx, pl in enumerate(pool):
+          mine = (pl.get("area") in areas_here) if (areas_here and pl.get("area")) else (idx % parts == part - 1)
+          tagged.append({**pl, "priority": "primary" if mine else "backup"})
+        tagged.sort(key=lambda x: x["priority"] != "primary")
+        places_for = json.dumps(tagged, ensure_ascii=False, indent=2) if tagged else "[]"
+        area_for = area_block_for(first, last)
+        keep = [ln for ln in windows_lines
+                if not (ln.startswith("- DAY 1") and first != 1) and not (ln.startswith("- LAST DAY") and last != total_days)]
+        transport_for = "\n".join(keep)
+      prompt = build_prompt(chunk_block, places_for, area_for, transport_for)
+      error: Optional[Exception] = None
+      for _attempt in range(2):                     # a cut-off or malformed answer gets one more try
+        try:
+          raw_text = await asyncio.to_thread(self._generate_with_fallback, prompt)
+          parsed_part = self._parse_ai_json(raw_text)
+          return parsed_part, self._days_from_ai(parsed_part, first, last, schedule, daily_total), None
+        except Exception as exc:                      # noqa: BLE001 - reported below if nothing else works
+          error = exc
+      return None, {}, error
+
+    results = await asyncio.gather(*[plan_days(a, b, i + 1, len(chunks)) for i, (a, b) in enumerate(chunks)])
+    by_number: Dict[int, ItineraryDay] = {}
+    parsed: Dict[str, Any] = {}
+    first_error: Optional[Exception] = None
+    for part_parsed, part_days, err in results:
+      if part_parsed is not None and not parsed:
+        parsed = part_parsed
+      by_number.update(part_days)
+      first_error = first_error or err
+    if not by_number and first_error is not None:
+      raise first_error if isinstance(first_error, RuntimeError) else RuntimeError(str(first_error))
+
+    # Days the AI skipped or that were cut off: ask for just those, then fall back to a plain free day
+    missing = [n for n in range(1, total_days + 1) if n not in by_number]
+    if missing:
+      repairs = [(m[0], m[-1]) for m in self._runs_of(missing)]
+      fixed = await asyncio.gather(*[plan_days(a, b, repair=True) for a, b in repairs])
+      for _p, part_days, _e in fixed:
+        for n, day in part_days.items():
+          by_number.setdefault(n, day)
+    for n in range(1, total_days + 1):
+      if n not in by_number:
+        by_number[n] = self._free_day(n, schedule, daily_total)
+    days: List[ItineraryDay] = [by_number[n] for n in range(1, total_days + 1)]
 
     cost_breakdown = self._calculate_cost_breakdown(req, trip_total)
 

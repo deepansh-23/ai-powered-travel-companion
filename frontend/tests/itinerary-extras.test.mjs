@@ -299,3 +299,15 @@ console.log("plan-your-area start city: all assertions passed");
   assert.ok(html.includes("date-strip-load") && html.includes("Compare prices for nearby dates") && html.includes("only when you ask"));
   console.log("nearby-date prompt: all assertions passed");
 }
+
+// ---------------------------------------------------------------- website links on places and restaurants
+{
+  const { siteLinkHtml } = await import("../js/pages/itinerary-extras.js");
+  const ok = siteLinkHtml("https://example.org/a?x=1&y=2");
+  assert.ok(ok.includes('href="https://example.org/a?x=1&amp;y=2"') && ok.includes('rel="noopener noreferrer"') && ok.includes("Website"));
+  assert.equal(siteLinkHtml(""), "");
+  assert.equal(siteLinkHtml(null), "");
+  assert.equal(siteLinkHtml("javascript:alert(1)"), "");
+  assert.equal(siteLinkHtml("www.nohttp.test"), "");
+  console.log("website links: all assertions passed");
+}

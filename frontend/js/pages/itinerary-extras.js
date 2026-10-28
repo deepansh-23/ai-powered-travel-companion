@@ -501,6 +501,13 @@ export function buildHotelConnectorHtml(from, to) {
 
 const NOTE_ICONS = { arrival: "🛬", hotel_change: "🔁", departure: "🧳" };
 
+/** "Website" link for a place or restaurant. Only real http(s) addresses become links. */
+export function siteLinkHtml(url) {
+  const u = String(url || "").trim();
+  if (!/^https?:\/\//i.test(u)) return "";
+  return `<div class="stop-website"><a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">🌐 Website ↗</a></div>`;
+}
+
 /** End of the day: "after your last stop, go back to the hotel" with a map link and an approximate time. */
 export function buildReturnToHotelHtml(rt) {
   if (!rt || !rt.hotel_name) return "";

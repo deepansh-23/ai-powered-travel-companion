@@ -388,6 +388,9 @@ class PlacesService:
 
         processed.sort(key=lambda p: (p.distance_m is None, p.distance_m or 0, p.name))
         final_list = processed[:limit]
+        counts_by_cat = {}                      # counts match the returned list, so a chip never promises more than it shows
+        for pl in final_list:
+            counts_by_cat[pl.category] = counts_by_cat.get(pl.category, 0) + 1
 
         return PlacesSearchResponse(
             center=center,
@@ -455,6 +458,10 @@ class PlacesService:
 
         processed.sort(key=lambda c: (c.distance_m is None, c.distance_m or 0, c.name))
         final_list = processed[:limit]
+        counts_by_amenity = {}
+        for cf in final_list:
+            for am in cf.amenities:
+                counts_by_amenity[am] = counts_by_amenity.get(am, 0) + 1
 
         return CafesSearchResponse(
             center=center,
@@ -539,6 +546,9 @@ class PlacesService:
 
         processed.sort(key=lambda m: (m.distance_m is None, m.distance_m or 0, m.name))
         final_list = processed[:limit]
+        counts_by_service = {}
+        for md in final_list:
+            counts_by_service[md.service_type] = counts_by_service.get(md.service_type, 0) + 1
 
         return MedicalSearchResponse(
             center=center,

@@ -324,7 +324,7 @@ export class NearbyExplorerController {
       latitude: lat !== null ? lat : undefined,
       longitude: lon !== null ? lon : undefined,
       radius_km: radius,
-      limit: 30
+      limit: 50
     };
 
     try {

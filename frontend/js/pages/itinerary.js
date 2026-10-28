@@ -36,6 +36,7 @@ import {
   hotelHop,
   buildDayNotesHtml,
   buildReturnToHotelHtml,
+  siteLinkHtml,
   buildFlightSiteLinksHtml,
   placeAboutHtml,
   recommendedAreas,
@@ -1615,6 +1616,11 @@ class ItineraryPlannerController {
     ];
 
     // Compute duration from departure and return dates
+    // The date fields are the truth: they may have been edited after the transport search
+    const depLive = document.getElementById("itineraryDepDate")?.value;
+    const retLive = document.getElementById("itineraryRetDate")?.value;
+    if (depLive) this.outboundDate = depLive;
+    if (retLive) this.returnDate = retLive;
     let durationDays = 3;
     if (this.outboundDate && this.returnDate) {
       const d1 = new Date(this.outboundDate);
@@ -1815,6 +1821,7 @@ class ItineraryPlannerController {
           <h4 class="stop-name">${escapeHtml(p.name)}</h4>
           ${p.category ? `<div class="stop-meta">${escapeHtml(titleCase(String(p.category)))}${p.duration ? ` · ${escapeHtml(p.duration)}` : ""}${p.admission ? ` · ${escapeHtml(p.admission)}` : ""}</div>` : ""}
           ${p.address ? `<div class="stop-address">📮 ${escapeHtml(p.address)}</div>` : ""}
+          ${siteLinkHtml(p.website)}
           ${placeAboutHtml(p)}
           ${renderDirections(p.directions)}
         </div>
@@ -1843,6 +1850,7 @@ class ItineraryPlannerController {
               <h4 class="stop-name">${escapeHtml(f.name)}</h4>
               <div class="stop-meta">${escapeHtml(f.cuisine || "")}${f.price_level ? ` · ${escapeHtml(f.price_level)}` : ""}</div>
               ${f.address ? `<div class="stop-address">📮 ${escapeHtml(f.address)}</div>` : ""}
+              ${siteLinkHtml(f.website)}
               <p class="segment-description">Must try: <em>${escapeHtml(f.recommendation || "")}</em></p>
               ${renderDirections(f.directions)}
             </div>

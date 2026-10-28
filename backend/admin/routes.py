@@ -29,7 +29,7 @@ from app.security import require_same_origin
 from app.services import auth_service
 from app.services.activity_service import today as activity_today
 from app.services.captcha_service import captcha_service
-from admin import analytics, service, usage as usage_report
+from admin import analytics, service, usage as usage_report, database as db_report
 from admin.monitoring import metrics_tracker
 from admin.permissions import (
     ADMIN_STEPUP_COOKIE,
@@ -570,6 +570,40 @@ async def put_usage_settings(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return await get_usage_settings(_admin, db)
+
+
+# ──────────────────────────── Database monitor ───────────────────────────────
+
+@router.get("/database")
+async def get_database_report(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Database size, storage and memory against your plan, connections, performance counters and warnings (read-only)."""
+    try:
+        return await db_report.build_report(db)
+    except Exception:
+        logger.exception("Admin database report failed")
+        raise HTTPException(status_code=500, detail="Failed to build the database report.")
+
+
+@router.get("/database/settings")
+async def get_database_settings(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    return {"limits": await db_report.get_limits(db)}
+
+
+@router.put("/database/settings", dependencies=[Depends(require_same_origin)])
+async def put_database_settings(
+    body: Dict[str, Any] = Body(...),
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Saves your database plan sizes (storage, memory, connections). They only raise warnings; nothing is blocked."""
+    extra = set(body) - {"limits"}
+    if extra or not isinstance(body.get("limits"), dict):
+        raise HTTPException(status_code=400, detail="Send an object like {\"limits\": {...}}.")
+    try:
+        await db_report.save_limits(db, body["limits"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await get_database_settings(_admin, db)
 
 
 @router.post("/usage/serpapi-quota", dependencies=[Depends(require_same_origin)])

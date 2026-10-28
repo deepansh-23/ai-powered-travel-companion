@@ -74,6 +74,8 @@ So the app is honest about it:
 
 ## 🧠 How the planner thinks
 
+- 📅 **Every day of the trip is planned.** Long trips (more than 4 days) are planned by the AI in parts of at most 4 days, so nothing gets cut off. Any day the AI skips is requested again, and only if that also fails does it appear as a plain "Free day".
+- 🌐 **Website links.** Places and restaurants show a website link only when the real place data has one. Addresses written by the AI are never used.
 - 🏨 **Fewer hotel changes.** One hotel for the whole stay in a place. A new hotel is only suggested when you move to another city, or when two or more days are spent far (about 20 km or more) from the first hotel. Hotels less than 3 km apart never trigger a "changing hotel" step.
 - 🛬 **Arrival day is planned too.** After you land, the plan allows time to leave the airport, reach the hotel and rest for 1 to 1.5 hours. Then it adds a few nearby places and dinner for the rest of the evening. The same logic applies on days when you move between cities by flight or train.
 - ✈️ **Flights between cities show flight details.** Once you pick a flight or train between two places, you see its times, duration and distance. Cab and road price estimates are shown only before you choose, or if you choose a cab.
@@ -92,6 +94,7 @@ A private control centre at **`/admin/`** for the site owner. It is built into t
 | 📊 **Overview** | Total users, admins, active/inactive accounts, itineraries and sign-ups in the last 7 days |
 | 📈 **Analytics** | Daily, weekly and monthly active users, new vs returning users, guests vs registered users, most-used features (Itinerary Planner, Area Guide, cafés, medical, places), date-range filters and trend charts |
 | 💸 **AI & API Usage** | AI requests by model and feature, successes, failures and response times, external API usage (SerpApi, Geoapify, RailRadar, OSRM, reCAPTCHA) with quota bars, estimated AI spend, and alerts for limits, failure spikes and unusually high traffic |
+| 🗄️ **Database** | Database size and storage left, connections used, memory settings and cache hit rate, the website server's memory and disk, performance counters, and warnings when something nears a limit (see below) |
 | 👥 **Users** | Search and filter by role or status, sort by newest or last activity, see registration date and last activity, suspend or reactivate, promote or demote admins, reset a password (temporary password shown once), delete accounts, and review account deletion requests (with safety guards: you can't remove yourself or the last admin) |
 | 🗺️ **Itineraries** | Search, filter by type, and view any saved record (itinerary, places, cafés, medical, area guide) in a readable layout, with raw data one click away. Delete saved items |
 | 📈 **API Monitoring** | Request counts, error rate, response times, slowest endpoints and recent failures (last 15 minutes or 24 hours) |
@@ -124,6 +127,13 @@ Every call to the Gemini model and to the external APIs is counted with its mode
 - **SerpApi keys:** the page shows which key is serving searches (main or backup, set with `SERPAPI_API_KEY` and `SERP_API_KEY2`) and warns when the backup key is in use or when no key is working. Keys themselves are never shown.
 - **SerpApi quota:** the "Check SerpApi searches left" button reads the remaining searches of each key from SerpApi's free account endpoint.
 - Recent failures are kept in memory only and reset when the server restarts.
+
+### Database page
+
+- **What is real:** database size, biggest tables, connections used (against the server's own maximum), cache hit rate, deadlocks, long-running queries, response time, the memory PostgreSQL is configured to use, and the memory and disk of the website server (read from the operating system).
+- **What needs your input:** Aiven does not tell customers the disk size or RAM of the database machine. Enter your plan's storage and memory once under *Plan sizes and limits* to see **storage left** and get warnings at 80% and 100%. Until then the page shows what is used and says the plan size is not set.
+- **Warnings:** storage or connections near the limit, a full connection pool, a stuck or very long query, a low cache hit rate, tables that need cleaning, transaction-ID age, a slow or unreachable database, and low website-server memory or disk. Limits only warn; they never block visitors.
+- **Safe:** everything is read-only, and only the three plan numbers can be saved.
 
 ### Account controls
 

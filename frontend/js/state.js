@@ -66,6 +66,8 @@ class AppState {
   setResults(center, places) {
     this.center = center;
     this.allPlaces = places || [];
+    this._amenityKeys = new Set();           // every amenity name that appears, so chips can be told apart from types
+    this.allPlaces.forEach(p => (Array.isArray(p.amenities) ? p.amenities : []).forEach(a => this._amenityKeys.add(String(a).toLowerCase())));
     this.activeFilters = new Set(["all"]);
     this.selectedPlace = null;
     this.currentRoute = null;
@@ -103,17 +105,20 @@ class AppState {
     this.notify("filters", this.activeFilters);
   }
 
+  // Chips are of two kinds: a type (category on Places, service type on Medical) and an amenity (Cafes).
+  // Several type chips mean "any of these types"; several amenity chips mean "has all of these amenities".
+  // If both kinds are active, a place must satisfy both.
   isPlaceVisible(place) {
     if (this.activeFilters.has("all")) return true;
-    const cat = (place.category || place.service_type || "").toLowerCase();
-    if (this.activeFilters.has(cat)) return true;
-
-    // Check amenities if cafe
-    if (place.amenities && Array.isArray(place.amenities)) {
-      const activeAmenities = Array.from(this.activeFilters).filter(f => f !== "all");
-      return activeAmenities.every(a => place.amenities.map(x => x.toLowerCase()).includes(a.toLowerCase()));
-    }
-    return false;
+    const active = Array.from(this.activeFilters).filter(f => f !== "all");
+    const types = [place.category, place.service_type].filter(Boolean).map(x => String(x).toLowerCase());
+    const amenities = Array.isArray(place.amenities) ? place.amenities.map(x => String(x).toLowerCase()) : [];
+    const amenityKeys = this._amenityKeys || new Set();
+    const wantedAmenities = active.filter(f => amenityKeys.has(f));
+    const wantedTypes = active.filter(f => !amenityKeys.has(f));
+    const typeOk = wantedTypes.length === 0 || wantedTypes.some(f => types.includes(f));
+    const amenityOk = wantedAmenities.every(f => amenities.includes(f));
+    return typeOk && amenityOk;
   }
 
   getVisiblePlaces() {

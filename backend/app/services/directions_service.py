@@ -15,6 +15,7 @@ import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
+from app.utils.validation import validate_website_url
 
 ROAD_FACTOR = 1.3
 WALK_KMH = 4.5
@@ -219,6 +220,8 @@ def enrich_itinerary(
     lon = match.get("longitude") if match else getattr(item, "longitude", None)
     if match:
       item.latitude, item.longitude = lat, lon
+      if hasattr(item, "website"):
+        item.website = validate_website_url(match.get("website"))   # real link from the data source, or none
     point = _Point(name, address or (match.get("address") if match else None), lat, lon)
     if origin is not None:
       item.directions = build_leg(origin, point, preference)

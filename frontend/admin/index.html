@@ -83,6 +83,11 @@
         System Health
       </button>
 
+      <button class="adm-nav-item" data-page="database" aria-label="Database">
+        <span class="adm-nav-icon">🗄️</span>
+        Database
+      </button>
+
       <button class="adm-nav-item" data-page="usage" aria-label="AI and API Usage">
         <span class="adm-nav-icon">💸</span>
         AI &amp; API Usage
@@ -213,6 +218,26 @@
 
         <div id="admUsersPager" class="adm-pagination" aria-label="Pagination"></div>
       </div>
+    </section>
+
+    <!-- ── Database Page ──────────────────────────────────────────────── -->
+    <section id="page-database" class="adm-page" aria-label="Database">
+      <div class="adm-page-header">
+        <h2 class="adm-page-title">Database</h2>
+        <p class="adm-page-subtitle" id="admDbSub">Loading…</p>
+      </div>
+      <div class="adm-an-controls">
+        <button id="admDbRefresh" class="adm-refresh-btn" aria-label="Refresh database report">↻ Refresh</button>
+      </div>
+      <div id="admDbAlerts" aria-live="polite"></div>
+      <div id="admDbNotice" class="adm-set-desc" style="margin:6px 0 12px;"></div>
+      <div id="admDbCards" class="adm-fb-summary"></div>
+      <div class="adm-chart-card" style="margin-top:14px;"><h3>Storage</h3><div style="overflow-x:auto;" id="admDbStorage"></div></div>
+      <div class="adm-chart-card" style="margin-top:14px;"><h3>Connections</h3><div id="admDbConnections"></div></div>
+      <div class="adm-chart-card" style="margin-top:14px;"><h3>Database memory</h3><div style="overflow-x:auto;" id="admDbMemory"></div></div>
+      <div class="adm-chart-card" style="margin-top:14px;"><h3>Website server memory and disk</h3><div id="admDbApp"></div></div>
+      <div class="adm-chart-card" style="margin-top:14px;"><h3>Performance and health counters</h3><div style="overflow-x:auto;" id="admDbPerformance"></div></div>
+      <div class="adm-chart-card" style="margin-top:14px;"><h3>Plan sizes and limits</h3><div id="admDbSettings"></div></div>
     </section>
 
     <!-- ── AI & API Usage Page ────────────────────────────────────────── -->
@@ -680,5 +705,6 @@
 <script src="/admin/admin-users-extra.js"></script>
 <script src="/admin/admin-analytics.js"></script>
 <script src="/admin/admin-usage.js"></script>
+<script src="/admin/admin-database.js"></script>
 </body>
 </html>

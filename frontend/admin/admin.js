@@ -8,15 +8,15 @@
    Configuration
    ────────────────────────────────────────────────────────────────────────── */
 const ADM_API = {
-  overview:     '/api/admin/overview',
-  users:        '/api/admin/users',
-  itineraries:  '/api/admin/itineraries',
-  monitoring:   '/api/admin/monitoring',
+  overview: '/api/admin/overview',
+  users: '/api/admin/users',
+  itineraries: '/api/admin/itineraries',
+  monitoring: '/api/admin/monitoring',
   systemHealth: '/api/admin/system-health',
-  authStatus:   '/api/admin/auth-status',
-  stepup:       '/api/admin/stepup',
-  logout:       '/api/auth/logout',
-  me:           '/api/auth/me',
+  authStatus: '/api/admin/auth-status',
+  stepup: '/api/admin/stepup',
+  logout: '/api/auth/logout',
+  me: '/api/auth/me',
 };
 
 const PAGE_SIZE = 20;
@@ -97,7 +97,7 @@ function admDatetime(iso) {
 }
 
 function admEscape(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function admNumFmt(n) {
@@ -256,6 +256,7 @@ function admNavigate(page) {
     itineraries: 'Itinerary Management',
     monitoring: 'API Monitoring',
     health: 'System Health',
+    database: 'Database',
     settings: 'Settings',
     feedback: 'Feedback & Diagnostics',
   };
@@ -273,6 +274,7 @@ function admNavigate(page) {
   else if (page === 'itineraries') admLoadItineraries();
   else if (page === 'monitoring') admLoadMonitoring();
   else if (page === 'health') admLoadHealth();
+  else if (page === 'database' && typeof admLoadDatabase === 'function') admLoadDatabase();
   else if (page === 'settings' && typeof admLoadSettings === 'function') admLoadSettings();
   else if (page === 'feedback' && typeof admLoadFeedbackPage === 'function') admLoadFeedbackPage();
 }
@@ -339,7 +341,7 @@ async function admCheckAuth() {
 async function admLogout() {
   try {
     await admFetch(ADM_API.logout, { method: 'POST' });
-  } catch (_) {}
+  } catch (_) { }
   window.location.href = '/';
 }
 
@@ -703,7 +705,7 @@ async function admOpenItinModal(iid) {
     let payloadJson = '—';
     try {
       payloadJson = JSON.stringify(item.payload, null, 2);
-    } catch (_) {}
+    } catch (_) { }
 
     body.innerHTML = `
       <div class="adm-detail-grid">
@@ -946,8 +948,8 @@ async function admLoadHealth() {
     const stBadge = stClass === 'healthy'
       ? '<span class="adm-badge badge-active" style="font-size:13px;">Healthy</span>'
       : stClass === 'degraded'
-      ? '<span class="adm-badge" style="background:var(--adm-yellow-dim);color:var(--adm-yellow);font-size:13px;">Degraded</span>'
-      : '<span class="adm-badge badge-inactive" style="font-size:13px;">Unavailable</span>';
+        ? '<span class="adm-badge" style="background:var(--adm-yellow-dim);color:var(--adm-yellow);font-size:13px;">Degraded</span>'
+        : '<span class="adm-badge badge-inactive" style="font-size:13px;">Unavailable</span>';
 
     // Banner
     banner.innerHTML = `
