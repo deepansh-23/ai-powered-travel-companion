@@ -128,6 +128,20 @@ Every call to the Gemini model and to the external APIs is counted with its mode
 - **SerpApi quota:** the "Check SerpApi searches left" button reads the remaining searches of each key from SerpApi's free account endpoint.
 - Recent failures are kept in memory only and reset when the server restarts.
 
+### Monthly itinerary limit
+
+- **Admin:** Settings → *Itineraries per month (normal accounts)*. Choose *No restriction*, or 1, 2, 3 … up to 100 per calendar month. It applies immediately and can be changed any time.
+- **Normal accounts:** each itinerary generated counts once (a failed attempt is given back). When the month's allowance is used up, generating shows a clear message with the reset date. Counts restart on the 1st of each month (UTC).
+- **Admin accounts:** never limited and never counted.
+- **Users see it:** logged-in accounts see "You can generate N itineraries per month · X left" on the Home page and the Itinerary Planner. Nothing is shown when there is no limit. Guests cannot generate itineraries (an account is required), so no limit note is shown to them.
+- Only a small count per account per month is stored (table `itinerary_usage`, created automatically).
+
+### CAPTCHA on reviews
+
+Posting a review needs a fresh "I'm not a robot" tick each time (floating review panel and the Reviews page). It is checked on the server, so scripts cannot post directly. Reviews already needed a login; guests are asked to log in.
+
+**If the CAPTCHA does not appear or fails**, check the server log: the reason from Google/Cloudflare is now written there (for example `invalid-input-secret` = wrong or mismatched keys). Common causes: both `RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY` must be set (and on the host, not only in your local `.env`); the key must be a reCAPTCHA **v2 "I'm not a robot" checkbox** key; and every address you open the site on must be listed under the key's domains (`localhost`, `127.0.0.1` and your live domain are separate entries).
+
 ### Database page
 
 - **What is real:** database size, biggest tables, connections used (against the server's own maximum), cache hit rate, deadlocks, long-running queries, response time, the memory PostgreSQL is configured to use, and the memory and disk of the website server (read from the operating system).

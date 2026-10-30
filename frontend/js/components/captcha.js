@@ -82,7 +82,10 @@ class CaptchaManager {
       s.defer = true;
       s.dataset.captchaSrc = url;
       s.onload = () => resolve();
-      s.onerror = () => reject(new Error("Could not load the security check. Check your internet connection."));
+      s.onerror = () => {
+        s.remove();                       // so a later attempt really tries to load it again
+        reject(new Error("Could not load the security check. Check your internet connection."));
+      };
       document.head.appendChild(s);
     });
   }
@@ -106,6 +109,13 @@ class CaptchaManager {
     });
   }
 
+  /** Widget look: the normal checkbox is ~304px wide, so very narrow screens get the compact version. */
+  widgetLook(container) {
+    const room = (container && container.clientWidth) || (window.innerWidth - 40);
+    const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    return { size: room < 320 ? "compact" : "normal", theme: dark ? "dark" : "light" };
+  }
+
   /**
    * Draws the CAPTCHA checkbox inside `container` (used by the login / sign-up forms).
    * Resolves {enabled:false} when no CAPTCHA keys are configured.
@@ -116,12 +126,20 @@ class CaptchaManager {
     await this.loadScript(this.config.script_url);
     const provider = await this.waitForProvider();
     const globalName = this.config.provider === "turnstile" ? "turnstile" : "grecaptcha";
-    const widgetId = provider.render(container, {
-      sitekey: this.config.site_key,
-      callback: (token) => onToken && onToken(token),
-      "expired-callback": () => onExpire && onExpire(),
-      "error-callback": () => onError && onError()
-    });
+    container.innerHTML = "";            // a box that already holds a widget cannot be rendered into again
+    let widgetId;
+    try {
+      widgetId = provider.render(container, {
+        sitekey: this.config.site_key,
+        ...this.widgetLook(container),
+        callback: (token) => onToken && onToken(token),
+        "expired-callback": () => onExpire && onExpire(),
+        "error-callback": () => onError && onError()
+      });
+    } catch (err) {
+      console.error("CAPTCHA could not start:", err);
+      throw new Error("The security check could not start. If you run this site, check the CAPTCHA site key and its allowed domains.");
+    }
     return {
       enabled: true,
       reset() {
@@ -169,6 +187,7 @@ class CaptchaManager {
       .then((p) => {
         this.widgetId = p.render(container, {
           sitekey: this.config.site_key,
+          ...this.widgetLook(container),
           callback: (token) => {
             this.token = token;
             msg.textContent = "";

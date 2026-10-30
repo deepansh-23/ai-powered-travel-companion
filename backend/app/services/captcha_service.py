@@ -6,8 +6,9 @@ import hashlib
 import hmac
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import httpx
+from fastapi import HTTPException, status
 from app.services.usage_service import usage_recorder
 
 from app.config import settings
@@ -30,11 +31,43 @@ PROVIDERS = {
 
 _PLACEHOLDERS = {"your_recaptcha_site_key_here", "your_recaptcha_secret_key_here"}
 
+# What the provider's error codes mean, in words a site owner can act on. These are written to the SERVER LOG
+# (never shown to visitors, who only get a short "please try again").
+_ERROR_HELP = {
+    "missing-input-secret": "The secret key is missing on the server (RECAPTCHA_SECRET_KEY).",
+    "invalid-input-secret": "The secret key is wrong, or it does not belong to the site key. Copy BOTH keys from the same "
+                            "key in the reCAPTCHA / Turnstile console, and check CAPTCHA_PROVIDER matches that provider.",
+    "missing-input-response": "The browser sent no CAPTCHA answer.",
+    "invalid-input-response": "The CAPTCHA answer was not valid (it expired or was altered).",
+    "timeout-or-duplicate": "The CAPTCHA answer was already used or took more than 2 minutes. Each tick can be used once.",
+    "bad-request": "The provider rejected the request as malformed.",
+    "hostname-mismatch": "The CAPTCHA was solved on a domain that is not in the key's allowed domain list.",
+    "browser-error": "The visitor's browser reported an error while loading the CAPTCHA.",
+}
+
 
 class CaptchaService:
     # ---- configuration -------------------------------------------------
     def provider(self) -> Dict[str, str]:
         return PROVIDERS.get(settings.CAPTCHA_PROVIDER, PROVIDERS["recaptcha"])
+
+    def config_problem(self) -> Optional[str]:
+        """Why the CAPTCHA is off or cannot work, in plain words (None when it looks fine)."""
+        site, secret = (settings.RECAPTCHA_SITE_KEY or "").strip(), (settings.RECAPTCHA_SECRET_KEY or "").strip()
+        has_site = bool(site) and site not in _PLACEHOLDERS
+        has_secret = bool(secret) and secret not in _PLACEHOLDERS
+        if not has_site and not has_secret:
+            return "No CAPTCHA keys are set, so the CAPTCHA is switched off."
+        if has_site and not has_secret:
+            return "RECAPTCHA_SECRET_KEY is missing, so the CAPTCHA is switched off. Set both keys."
+        if has_secret and not has_site:
+            return "RECAPTCHA_SITE_KEY is missing, so the CAPTCHA is switched off. Set both keys."
+        provider = settings.CAPTCHA_PROVIDER
+        if provider == "recaptcha" and site.startswith("0x"):
+            return "The site key looks like a Cloudflare Turnstile key, but CAPTCHA_PROVIDER is 'recaptcha'. Set CAPTCHA_PROVIDER=turnstile."
+        if provider == "turnstile" and site.startswith("6L"):
+            return "The site key looks like a Google reCAPTCHA key, but CAPTCHA_PROVIDER is 'turnstile'. Set CAPTCHA_PROVIDER=recaptcha."
+        return None
 
     def is_enabled(self) -> bool:
         """True only when BOTH keys are configured (real values, not placeholders)."""
@@ -117,9 +150,11 @@ class CaptchaService:
                 result = response.json()
                 success = result.get("success", False)
                 if not success:
+                    codes: List[str] = list(result.get("error-codes", []) or [])
+                    self._log_failure(codes)
                     return {
                         "success": False,
-                        "error_codes": result.get("error-codes", []),
+                        "error_codes": codes,
                         "message": "CAPTCHA verification failed. Please tick the box again."
                     }
                 return {
@@ -128,12 +163,37 @@ class CaptchaService:
                     "action": result.get("action")
                 }
         except Exception as exc:
-            logger.error(f"Error during reCAPTCHA verification: {exc}")
+            logger.error(f"Error during CAPTCHA verification (could not reach {self.provider()['verify_url']}): {exc}")
             return {
                 "success": False,
                 "error_codes": ["verification-network-error"],
-                "message": f"Verification service error: {str(exc)}"
+                "message": "The security check service could not be reached. Please try again in a moment."
             }
+
+    @staticmethod
+    def _log_failure(codes: List[str]) -> None:
+        """Put the provider's reason in the server log so a misconfiguration is visible, not silent."""
+        if not codes:
+            logger.warning("CAPTCHA verification failed (the provider gave no reason).")
+            return
+        for code in codes:
+            logger.warning("CAPTCHA verification failed: %s - %s", code, _ERROR_HELP.get(code, "see the provider's documentation."))
 
 
 captcha_service = CaptchaService()
+
+
+async def enforce_captcha(token: Optional[str], ip: Optional[str], action: str = "continue") -> None:
+    """Server-side human check for one protected action (for example posting a review).
+
+    A no-op when no CAPTCHA keys are configured (local development). Otherwise the token must be present and
+    accepted by the provider; a token works only once, so the page asks for a fresh tick every time.
+    Raises HTTP 400 with a readable message.
+    """
+    if not captcha_service.is_enabled():
+        return
+    if not token or not str(token).strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Please tick the CAPTCHA box to {action}.")
+    result = await captcha_service.verify_token(token, ip)
+    if not result.get("success"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, result.get("message", "CAPTCHA verification failed. Please try again."))

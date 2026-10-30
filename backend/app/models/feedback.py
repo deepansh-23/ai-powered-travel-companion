@@ -26,3 +26,4 @@ class FeedbackMultiCreateRequest(BaseModel):
     rating: int = Field(..., ge=1, le=5, description="1 to 5 star rating")
     comment: str = Field(..., min_length=2, max_length=2000, description="User review/comment")
     services: List[str] = Field(..., min_length=1, max_length=10, description="Services this review covers")
+    captcha_token: Optional[str] = Field(None, description="CAPTCHA token from the review form (single use)")

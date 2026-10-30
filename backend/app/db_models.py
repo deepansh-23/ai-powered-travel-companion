@@ -165,3 +165,17 @@ class ApiUsageDaily(Base):
     max_ms: Mapped[int] = mapped_column(Integer, default=0)
     tokens_in: Mapped[int] = mapped_column(Integer, default=0)
     tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ItineraryUsage(Base):
+    """How many itineraries each account generated in a calendar month (UTC), for the monthly limit.
+
+    One tiny row per account per month. Only a count is kept: no trip details.
+    """
+
+    __tablename__ = "itinerary_usage"
+
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    month: Mapped[str] = mapped_column(String(7), primary_key=True)        # "2026-11"
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

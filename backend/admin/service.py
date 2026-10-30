@@ -403,6 +403,7 @@ SETTING_DEFAULTS = {
     "guest_mode_enabled": ("true", "Allow unauthenticated visitors to use planner as guest"),
     "allow_registration": ("true", "Allow new users to create accounts"),
     "allow_reviews": ("true", "Allow logged-in users to submit new reviews"),
+    "itinerary_monthly_limit": ("0", "Itineraries a normal account can generate per month (0 = no restriction)"),
 }
 BOOL_SETTINGS = {k for k, (d, _) in SETTING_DEFAULTS.items() if d in ("true", "false")}
 # Turning these OFF/ON is visible to every visitor, so the admin must confirm explicitly.
@@ -414,6 +415,17 @@ DISRUPTIVE_VALUES = {
 }
 NOTICE_MAX_LEN = 300
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+ITINERARY_LIMIT_MAX = 1000
+
+
+def _limit(d: dict) -> int:
+    """Monthly itinerary limit as a whole number (0 = no restriction); a damaged value counts as 0."""
+    try:
+        return max(0, min(ITINERARY_LIMIT_MAX, int(float(str(d.get("itinerary_monthly_limit", "0")).strip() or 0))))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _bool(d: dict, key: str) -> bool:
@@ -432,6 +444,7 @@ async def get_settings(db: AsyncSession) -> dict:
         "guest_mode_enabled": _bool(d, "guest_mode_enabled"),
         "allow_registration": _bool(d, "allow_registration"),
         "allow_reviews": _bool(d, "allow_reviews"),
+        "itinerary_monthly_limit": _limit(d),
         "updated_at": latest_update,
     }
 
@@ -477,6 +490,10 @@ async def update_settings(db: AsyncSession, new_settings: dict) -> dict:
             if not isinstance(raw, bool):
                 raise ValueError(f"{key} must be true or false.")
             str_val = "true" if raw else "false"
+        elif key == "itinerary_monthly_limit":
+            if isinstance(raw, bool) or not isinstance(raw, int) or not 0 <= raw <= ITINERARY_LIMIT_MAX:
+                raise ValueError(f"The monthly itinerary limit must be a whole number from 0 (no restriction) to {ITINERARY_LIMIT_MAX}.")
+            str_val = str(raw)
         else:
             str_val = str(raw)
         row = (await db.execute(select(AppSetting).where(AppSetting.key == key))).scalar_one_or_none()

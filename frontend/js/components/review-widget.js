@@ -10,6 +10,7 @@ import { api } from "../api.js";
 import { toast } from "./toast.js";
 import { escapeHtml, formatDateTime } from "../utils/formatters.js";
 import { authManager } from "./auth.js";
+import { captchaManager } from "./captcha.js";
 
 export const REVIEW_SERVICES = [
   "Overall Website",
@@ -82,11 +83,11 @@ export function renderStarPicker(container, initial = 5) {
 }
 
 /** Saves one review for every selected service. Throws a readable Error on failure. */
-export async function submitReview({ rating, comment, services }) {
+export async function submitReview({ rating, comment, services, captchaToken }) {
   if (!authManager.isLoggedIn()) throw new Error("Please log in to post a review.");
   if (!services || services.length === 0) throw new Error("Please select at least one service to review.");
   if (!comment || comment.trim().length < 2) throw new Error("Please write a short comment.");
-  const saved = await api.submitFeedbackMulti({ rating, comment: comment.trim(), services });
+  const saved = await api.submitFeedbackMulti({ rating, comment: comment.trim(), services, captcha_token: captchaToken || null });
   window.dispatchEvent(new CustomEvent("slg:reviews-updated"));
   return saved;
 }
@@ -136,6 +137,7 @@ function buildPanel() {
         <label class="review-label" for="rpComment">Your review</label>
         <textarea id="rpComment" class="review-textarea" maxlength="1500" placeholder="What worked well? What could be better?"></textarea>
       </div>
+      <div class="review-captcha" id="rpCaptcha"></div>
       <div id="rpStatus" class="review-status" role="status" aria-live="polite"></div>
       <button type="button" class="btn btn-primary" id="rpSubmit">Post review</button>
       <a href="${pagesPrefix()}reviews.html" class="review-hint" style="text-align:center;">Read all reviews →</a>
@@ -152,6 +154,24 @@ function buildPanel() {
 
   const setStatus = (msg, kind = "") => { status.textContent = msg; status.className = `review-status ${kind}`; };
 
+  // CAPTCHA: drawn the first time the form is opened by a logged-in person; one fresh tick per review
+  const cap = { widget: null, token: null, started: false };
+  const startCaptcha = async () => {
+    if (cap.started) return;
+    cap.started = true;
+    try {
+      cap.widget = await captchaManager.mountWidget(panel.querySelector("#rpCaptcha"), {
+        onToken: (t) => { cap.token = t; },
+        onExpire: () => { cap.token = null; },
+        onError: () => setStatus("The security check had a problem. Please reload the page and try again.", "error")
+      });
+    } catch (err) {
+      cap.started = false;
+      setStatus(err.message || "The security check could not load.", "error");
+    }
+  };
+  const resetCaptcha = () => { cap.token = null; if (cap.widget) cap.widget.reset(); };
+
   const open = (services) => {
     if (services && services.length) chips.setSelected(services);
     const loggedIn = authManager.isLoggedIn();
@@ -161,7 +181,7 @@ function buildPanel() {
     panel.classList.add("open");
     tab.setAttribute("aria-expanded", "true");
     setStatus("");
-    if (loggedIn) comment.focus();
+    if (loggedIn) { comment.focus(); startCaptcha(); }
   };
   const close = () => {
     panel.classList.remove("open");
@@ -173,13 +193,18 @@ function buildPanel() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && panel.classList.contains("open")) close(); });
 
   submit.addEventListener("click", async () => {
+    if (cap.widget && cap.widget.enabled && !cap.token) {
+      setStatus("Please tick the 'I'm not a robot' box before posting.", "error");
+      return;
+    }
     submit.disabled = true;
     setStatus("Saving…");
     try {
       const saved = await submitReview({
         rating: stars.getRating(),
         comment: comment.value,
-        services: chips.getSelected()
+        services: chips.getSelected(),
+        captchaToken: cap.token
       });
       setStatus(`Thank you! Saved for ${saved.length} service${saved.length > 1 ? "s" : ""}.`, "ok");
       comment.value = "";
@@ -188,6 +213,7 @@ function buildPanel() {
     } catch (err) {
       setStatus(err.message, "error");
     } finally {
+      resetCaptcha();                 // a CAPTCHA answer works once: the next review needs a new tick
       submit.disabled = false;
     }
   });

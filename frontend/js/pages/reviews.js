@@ -7,12 +7,35 @@ import { api } from "../api.js";
 import { toast } from "../components/toast.js";
 import { escapeHtml, formatDateTime } from "../utils/formatters.js";
 import { authManager } from "../components/auth.js";
+import { captchaManager } from "../components/captcha.js";
 import { renderServiceChips, submitReview, REVIEW_SERVICES, GENERAL_SERVICES } from "../components/review-widget.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("feedbackForm");
   const listContainer = document.getElementById("reviewsList");
   if (!listContainer) return;
+
+  // Posting needs a login AND a CAPTCHA tick (a fresh tick for every review, so scripts cannot spam)
+  const capBox = document.getElementById("reviewCaptcha");
+  const cap = { widget: null, token: null, started: false };
+  async function startCaptcha() {
+    if (!capBox || cap.started || !authManager.isLoggedIn()) return;
+    cap.started = true;
+    try {
+      cap.widget = await captchaManager.mountWidget(capBox, {
+        onToken: (t) => { cap.token = t; },
+        onExpire: () => { cap.token = null; },
+        onError: () => toast.error("The security check had a problem. Please reload the page and try again.")
+      });
+    } catch (err) {
+      cap.started = false;
+      toast.error(err.message || "The security check could not load.");
+    }
+  }
+  function resetCaptcha() {
+    cap.token = null;
+    if (cap.widget) cap.widget.reset();
+  }
 
   // Posting needs a login; reading does not
   const loginNote = document.getElementById("reviewLoginNote");
@@ -24,6 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (link) link.href = authManager.loginUrl();
     }
     if (form) form.querySelectorAll("input, textarea, select, button").forEach(el => { el.disabled = !loggedIn; });
+    startCaptcha();
   }
   if (authManager.ready) syncLoginNote();
   else window.addEventListener("slg:auth-ready", syncLoginNote, { once: true });
@@ -145,13 +169,18 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (cap.widget && cap.widget.enabled && !cap.token) {
+        toast.error("Please tick the 'I'm not a robot' box before posting.");
+        return;
+      }
+
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML = `<span>Submitting…</span>`;
       }
 
       try {
-        const saved = await submitReview({ rating, comment, services });
+        const saved = await submitReview({ rating, comment, services, captchaToken: cap.token });
 
         toast.success(`Thank you! Your review has been saved for ${saved.length} service${saved.length > 1 ? "s" : ""}.`);
         form.reset();
@@ -160,6 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         toast.error("Failed to submit review: " + err.message);
       } finally {
+        resetCaptcha();                 // a CAPTCHA answer works once: the next review needs a new tick
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.innerHTML = `<span>Post Feedback</span>`;

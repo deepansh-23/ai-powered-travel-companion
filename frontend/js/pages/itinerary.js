@@ -1693,6 +1693,7 @@ class ItineraryPlannerController {
       const retryBtn = document.getElementById("btnRetryGen");
       if (retryBtn) retryBtn.addEventListener("click", () => this.handleGenerateFinalItinerary());
     } finally {
+      window.dispatchEvent(new CustomEvent("slg:quota-changed"));   // "X itineraries left this month" note
       if (submitBtn) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = `<span>Generate My Itinerary</span>`;

@@ -176,6 +176,7 @@ class SettingsResponse(BaseModel):
     guest_mode_enabled: bool
     allow_registration: bool
     allow_reviews: bool = True
+    itinerary_monthly_limit: int = 0          # 0 = no restriction
     updated_at: Optional[datetime] = None
 
 
@@ -186,6 +187,7 @@ class UpdateSettingsRequest(BaseModel):
     guest_mode_enabled: Optional[bool] = None
     allow_registration: Optional[bool] = None
     allow_reviews: Optional[bool] = None
+    itinerary_monthly_limit: Optional[int] = Field(None, ge=0, le=1000, strict=True)   # 0 = no restriction
     # Must be true when the change would shut something off for visitors (see service.DISRUPTIVE_VALUES)
     confirm_disruptive: bool = False
 

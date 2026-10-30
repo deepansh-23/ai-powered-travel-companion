@@ -1,6 +1,7 @@
 """CAPTCHA verification routes (Section 25).
 """
 
+import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -10,6 +11,8 @@ from app.security import CAPTCHA_COOKIE
 from app.services.captcha_service import captcha_service
 
 router = APIRouter(prefix="/api/captcha", tags=["CAPTCHA"])
+logger = logging.getLogger(__name__)
+_warned_problems = set()          # each configuration problem is logged once, not on every page load
 
 
 class CaptchaVerifyRequest(BaseModel):
@@ -20,6 +23,10 @@ class CaptchaVerifyRequest(BaseModel):
 async def get_captcha_config():
     """Public config only: site key, provider and script URL. Never the secret."""
     enabled = captcha_service.is_enabled()
+    problem = captcha_service.config_problem()
+    if problem and problem not in _warned_problems:
+        _warned_problems.add(problem)
+        logger.warning("CAPTCHA configuration: %s", problem)
     return {
         "enabled": enabled,
         "site_key": settings.RECAPTCHA_SITE_KEY if enabled else "",
@@ -54,6 +61,6 @@ async def verify_captcha(req: CaptchaVerifyRequest, request: Request, response: 
             max_age=int(settings.CAPTCHA_SESSION_HOURS) * 3600,
             httponly=True,
             samesite="lax",
-            secure=request.url.scheme == "https",
+            secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https",
         )
     return {"status": "verified", "detail": "Human verification successful."}

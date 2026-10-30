@@ -28,7 +28,9 @@ from app.services.places_service import (
     _fetch_geoapify_places,
     _geoapify_feature_to_dict,
 )
-from app.security import require_user
+from app.db_models import User
+from app.security import require_user, require_user_or_guest
+from app.services import itinerary_quota_service as itinerary_quota
 from app.services.directions_service import enrich_itinerary
 from app.services.scope_service import scope_service
 from app.utils.budget import build_budget
@@ -124,8 +126,29 @@ async def plan_scope(req: ScopeRequest):
   return await scope_service.scope(req.destination, req.duration_days, req.kind)
 
 
-@router.post("/generate", response_model=ItineraryResponse, dependencies=[Depends(require_user)])
-async def generate_itinerary(req: ItineraryRequest):
+@router.get("/quota")
+async def itinerary_quota_status(user: Optional[User] = Depends(require_user_or_guest)):
+  """The monthly itinerary allowance of the signed-in account (guests cannot generate itineraries)."""
+  if user is None:
+    return {"guest": True, "unlimited": True, "limit": 0, "used": 0, "remaining": None}
+  return await itinerary_quota.status_for(user)
+
+
+@router.post("/generate", response_model=ItineraryResponse)
+async def generate_itinerary(req: ItineraryRequest, user: User = Depends(require_user)):
+  """Monthly limit around the generator: take one from the allowance, give it back if generating fails.
+
+  Admin accounts are never limited. The limit itself is set by the admin (Settings page).
+  """
+  reserved = await itinerary_quota.reserve(user)      # raises 429 with a clear message when the month is used up
+  try:
+    return await _generate_itinerary(req)
+  except Exception:
+    await itinerary_quota.refund(user, reserved)
+    raise
+
+
+async def _generate_itinerary(req: ItineraryRequest):
   """Generate a multi-day itinerary WITHOUT hotels.
 
   The response contains `stay_blocks`: groups of days that share one hotel. The traveller picks a hotel

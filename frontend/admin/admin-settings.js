@@ -30,6 +30,8 @@ const ADM_SETTING_FIELDS = [
     desc: 'Shows the text below as a banner at the top of the public site.' },
 ];
 const ADM_NOTICE_MAX = 300;
+// Choices for "itineraries per month": 0 means no restriction
+const ADM_LIMIT_CHOICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 75, 100];
 
 let admSet = { server: null, draft: null };
 
@@ -65,7 +67,21 @@ function admRenderSettings() {
       </label>
     </div>`).join('');
 
-  body.innerHTML = rows + `
+  // The saved value may be a number that is not in the list (set earlier): keep it selectable
+  const curLimit = Number(d.itinerary_monthly_limit) || 0;
+  const limitChoices = ADM_LIMIT_CHOICES.includes(curLimit) ? ADM_LIMIT_CHOICES : [...ADM_LIMIT_CHOICES, curLimit].sort((a, b) => a - b);
+  const limitRow = `
+    <div class="adm-set-row">
+      <div>
+        <div class="adm-set-label">Itineraries per month (normal accounts)</div>
+        <div class="adm-set-desc">How many itineraries each normal account can generate per calendar month. Choose "No restriction" to remove the limit. Admin accounts are never limited. The limit is shown to users on the Home and Itinerary pages and counts restart on the 1st of each month.</div>
+      </div>
+      <select id="admSetItinLimit" class="adm-select" aria-label="Itineraries per month">
+        ${limitChoices.map(n => `<option value="${n}" ${n === curLimit ? 'selected' : ''}>${n === 0 ? 'No restriction' : n + (n === 1 ? ' per month' : ' per month')}</option>`).join('')}
+      </select>
+    </div>`;
+
+  body.innerHTML = rows + limitRow + `
     <div class="adm-set-row" style="display:block;">
       <div class="adm-set-label">Announcement text</div>
       <div class="adm-set-desc" style="margin-bottom:8px;">Plain text only, up to ${ADM_NOTICE_MAX} characters.</div>
@@ -78,6 +94,8 @@ function admRenderSettings() {
     cb.addEventListener('change', () => { admSet.draft[cb.dataset.key] = cb.checked; admSetDirtyCheck(); }));
   const ta = document.getElementById('admSetNotice');
   ta.addEventListener('input', () => { admSet.draft.public_notice_text = ta.value; admSetDirtyCheck(); });
+  const lim = document.getElementById('admSetItinLimit');
+  if (lim) lim.addEventListener('change', () => { admSet.draft.itinerary_monthly_limit = Number(lim.value); admSetDirtyCheck(); });
 
   const upd = document.getElementById('admSetUpdated');
   if (upd) upd.textContent = admSet.server.updated_at
@@ -89,6 +107,9 @@ function admSetChanges() {
   const s = admSet.server, d = admSet.draft, out = {};
   ['maintenance_mode', 'public_notice_enabled', 'guest_mode_enabled', 'allow_registration', 'allow_reviews']
     .forEach(k => { if (!!d[k] !== !!s[k]) out[k] = !!d[k]; });
+  if ((Number(d.itinerary_monthly_limit) || 0) !== (Number(s.itinerary_monthly_limit) || 0)) {
+    out.itinerary_monthly_limit = Number(d.itinerary_monthly_limit) || 0;
+  }
   if ((d.public_notice_text || '').trim() !== (s.public_notice_text || '').trim()) {
     out.public_notice_text = (d.public_notice_text || '').trim();
   }

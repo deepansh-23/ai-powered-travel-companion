@@ -326,6 +326,11 @@ class ApiClient {
     return this._request("/api/feedback", { method: "GET" });
   }
 
+  // Monthly itinerary allowance of the signed-in account
+  getItineraryQuota() {
+    return this._request("/api/itinerary/quota", { method: "GET", silent401: true });
+  }
+
   // One review for several services (saved once per selected service)
   submitFeedbackMulti(payload) {
     return this._request("/api/feedback/multi", {
