@@ -21,7 +21,7 @@ const CATEGORY_ICONS = {
 
 export function renderPlaceCard(place, isSelected = false, onSelectCallback = null) {
   const card = document.createElement("article");
-  card.className = `place-card ${isSelected ? "selected" : ""}`;
+  card.className = `place-card${isSelected ? " selected" : ""}${place.is_24_7 === true ? " place-card-247" : ""}`;
   card.id = `card-${place.id}`;
   if (isSelected) {
     card.setAttribute("aria-current", "true");

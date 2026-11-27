@@ -15,6 +15,7 @@ import { toast } from "./toast.js";
 import { modal } from "./modal.js";
 import { captchaManager } from "./captcha.js";
 import { escapeHtml } from "../utils/formatters.js";
+import { setWorkspaceScope, clearUserWorkspace } from "../state.js";
 
 const inPages = () => location.pathname.includes("/pages/");
 const pagePath = (file) => (inPages() ? file : `pages/${file}`);
@@ -108,6 +109,7 @@ class AuthManager {
     }
     window.__slgLoggedIn = this.user !== null;
     window.__slgGuest = this.isGuest();
+    setWorkspaceScope(this.user ? (this.user.id || this.user.username) : "guest");
     this.ready = true;
     this.renderNav();
 
@@ -339,6 +341,7 @@ class AuthManager {
       await api.logout();
     } catch (_) {}
     // Nothing of this user may stay in the browser for the next person
+    clearUserWorkspace();
     Object.keys(sessionStorage).filter((k) => k.startsWith("slg_")).forEach((k) => sessionStorage.removeItem(k));
     window.location.href = homePath();
   }
@@ -372,6 +375,7 @@ class AuthManager {
       confirmBtn.textContent = "Deleting…";
       try {
         await api.deleteAccount(input.value);
+        clearUserWorkspace();
         Object.keys(sessionStorage).filter((k) => k.startsWith("slg_")).forEach((k) => sessionStorage.removeItem(k));
         modal.close();
         toast.success("Your account has been deleted.");
@@ -491,7 +495,9 @@ class AuthManager {
           list.hidden = !list.hidden;
           menuBtn.setAttribute("aria-expanded", String(!list.hidden));
         });
-        document.addEventListener("click", () => { list.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); });
+        if (this._docMenuClose) document.removeEventListener("click", this._docMenuClose);
+        this._docMenuClose = () => { list.hidden = true; menuBtn.setAttribute("aria-expanded", "false"); };
+        document.addEventListener("click", this._docMenuClose);
         box.querySelector("#btnLogout").addEventListener("click", () => this.logout());
         box.querySelector("#btnDeleteAccount").addEventListener("click", () => { list.hidden = true; this.openDeleteAccountDialog(); });
         box.querySelector("#btnChangePassword").addEventListener("click", () => { list.hidden = true; this.openChangePasswordDialog(); });

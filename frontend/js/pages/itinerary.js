@@ -4,6 +4,13 @@
  */
 
 import { api } from "../api.js";
+import {
+  saveServiceState,
+  loadServiceState,
+  clearServiceState,
+  createServicePersister,
+  hasResolvedWorkspaceScope
+} from "../state.js";
 import { toast } from "../components/toast.js";
 import { modal } from "../components/modal.js";
 import { escapeHtml, titleCase } from "../utils/formatters.js";
@@ -115,6 +122,14 @@ class ItineraryPlannerController {
     // Local preferences & Final plan state
     this.finalItinerary = null;
     this.isGenerating = false;
+
+    // Workspace persistence lifecycle flags
+    this._hasRestored = false;
+    this._userInteracted = false;
+    this._isRestoring = false;
+    this._persister = null;
+    this._budgetBreakdownOpen = false;
+    this._quickVersionOpen = false;
   }
 
   init() {
@@ -128,13 +143,91 @@ class ItineraryPlannerController {
     attachPlaceAutocomplete(document.getElementById("itinerarySource"));
     attachPlaceAutocomplete(document.getElementById("itineraryDest"));
     this.initScope();
-    this.restoreSessionState();
+
+    this._persister = createServicePersister(
+      "itinerary",
+      () => this.collectDraftState(),
+      {
+        debounceMs: 250,
+        legacySessionKey: "slg_session_itinerary",
+        shouldSave: () => !this._isRestoring && (
+          this._hasRestored || this._userInteracted || this.currentStep > 1 || !!this.finalItinerary || !!this.transportData
+        )
+      }
+    );
+    this.initLiveFormPersistence();
+
+    const urlSessionId = this.getRequestedSessionId();
+    if (urlSessionId) {
+      this.loadExplicitSessionById(urlSessionId);
+    } else if (hasResolvedWorkspaceScope() || authManager.ready) {
+      this.restoreSessionState();
+    }
+
+    // Re-check workspace once auth resolves (handles brand-new tabs without flashing wrong scope)
+    const onAuthReady = () => {
+      if (urlSessionId) {
+        if (!this._hasRestored) this.loadExplicitSessionById(urlSessionId);
+      } else if (!this._hasRestored && !this._userInteracted) {
+        this.restoreSessionState();
+      }
+    };
+    if (!authManager.ready) {
+      window.addEventListener("slg:auth-ready", onAuthReady, { once: true });
+    }
+
     initSavedSessions({
       service: "itinerary",
       saveButtonId: "btnSaveSession",
-      hasActiveState: () => !!sessionStorage.getItem("slg_session_itinerary"),
+      hasActiveState: () => !!loadServiceState("itinerary", { legacySessionKey: "slg_session_itinerary", consumeHandoff: false }),
       buildSave: () => this.buildDraftForSaving()
     });
+  }
+
+  getRequestedSessionId() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("session") || params.get("id") || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async loadExplicitSessionById(sessionId) {
+    if (!sessionId || !authManager.isLoggedIn()) return;
+    try {
+      const full = await api.getSession(sessionId);
+      if (full && full.service === "itinerary" && full.state) {
+        saveServiceState("itinerary", full.state, { legacySessionKey: "slg_session_itinerary" });
+        this.restoreSessionState(full.state);
+      }
+    } catch (err) {
+      console.warn("Could not load requested itinerary session:", err);
+      if (!this._hasRestored) this.restoreSessionState();
+    }
+  }
+
+  initLiveFormPersistence() {
+    const markDirty = () => {
+      if (this._isRestoring) return;
+      this._userInteracted = true;
+      this._persister?.scheduleSave();
+    };
+    ["transportSearchForm", "localPrefsForm"].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("input", markDirty);
+      el.addEventListener("change", markDirty);
+      el.addEventListener("click", (e) => {
+        if (e.target.closest(".select-chip, .mode-chip, .tag-pill-remove, .tag-picker-item, .scope-chip, .scope-arrival-chip")) {
+          markDirty();
+        }
+      });
+    });
+    const trainDetails = document.getElementById("trainDetails");
+    if (trainDetails) {
+      trainDetails.addEventListener("toggle", markDirty);
+    }
   }
 
   initDates() {
@@ -199,6 +292,11 @@ class ItineraryPlannerController {
       headerActions.style.display = (stepNum > 1) ? "block" : "none";
     }
 
+    if (!this._isRestoring) {
+      this._userInteracted = true;
+      this.persistSessionState();
+    }
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -247,26 +345,37 @@ class ItineraryPlannerController {
   }
 
   resetActiveState() {
-    sessionStorage.removeItem("slg_session_itinerary");
-    forgetDraft("itinerary");
-    this.selectedOutbound = null;
-    this.selectedReturn = null;
-    this.selectedHotel = null;
-    this.hotelSkipped = false;
-    this.finalItinerary = null;
-    this.skeleton = null;
-    this.stayHotels = {};
-    this.stayChoices = {};
-    this.transferChoices = {};
-    this.transferData = {};
-    this._transferPromises = {};
-    this.anchors = {};
-    this.scopeInfo = null;
-    this.scopeFor = "";
-    this.scopeState = { mode: "", selected: [], neighbourSelected: [], arrival: "" };
-    this.renderScopePanel();
-    this.dateStrips = { outbound: null, return: null };
-    this.setStep(1);
+    this._isRestoring = true;
+    try {
+      if (this._persister) this._persister.clear();
+      else clearServiceState("itinerary", { legacySessionKey: "slg_session_itinerary" });
+      forgetDraft("itinerary");
+      this._hasRestored = false;
+      this._userInteracted = false;
+      this._budgetBreakdownOpen = false;
+      this._quickVersionOpen = false;
+      this.transportData = null;
+      this.selectedOutbound = null;
+      this.selectedReturn = null;
+      this.selectedHotel = null;
+      this.hotelSkipped = false;
+      this.finalItinerary = null;
+      this.skeleton = null;
+      this.stayHotels = {};
+      this.stayChoices = {};
+      this.transferChoices = {};
+      this.transferData = {};
+      this._transferPromises = {};
+      this.anchors = {};
+      this.scopeInfo = null;
+      this.scopeFor = "";
+      this.scopeState = { mode: "", selected: [], neighbourSelected: [], arrival: "" };
+      this.renderScopePanel();
+      this.dateStrips = { outbound: null, return: null };
+      this.setStep(1);
+    } finally {
+      this._isRestoring = false;
+    }
     toast.info("Started new trip planning.");
   }
 
@@ -358,7 +467,17 @@ class ItineraryPlannerController {
   renderTransportLeg(legType, legData, { fetchStrip = true } = {}) {
     const container = document.getElementById(`${legType}TransportList`);
     const statusSpan = document.getElementById(legType === "outbound" ? "selectedOutboundStatus" : "selectedReturnStatus");
+    const metaSpan = document.getElementById(legType === "outbound" ? "outboundLegMeta" : "returnLegMeta");
     if (!container) return;
+
+    if (metaSpan) {
+      const route = this.legRoute(legType);
+      const date = this.legDate(legType);
+      const parts = [];
+      if (route.origin && route.destination) parts.push(`${route.origin} → ${route.destination}`);
+      if (date) parts.push(date);
+      metaSpan.textContent = parts.join(" · ");
+    }
 
     container.innerHTML = "";
 
@@ -409,7 +528,7 @@ class ItineraryPlannerController {
 
     allOptions.forEach(opt => {
       const card = document.createElement("div");
-      card.className = "transport-option-card";
+      card.className = "transport-option-card" + (opt.recommendation_badge ? " is-recommended" : "");
       card.id = `transport-${opt.id}`;
 
       const isFlight = opt.mode === "flight";
@@ -803,7 +922,8 @@ class ItineraryPlannerController {
       this.selectedOutbound = opt;
       const statusSpan = document.getElementById("selectedOutboundStatus");
       if (statusSpan) {
-        statusSpan.innerHTML = `<span style="color:var(--color-primary);">✓ Selected: ${escapeHtml(opt.operator)} (${opt.price ? "₹" + Math.round(opt.price).toLocaleString("en-IN") + " per person" : "fare not provided"})</span>`;
+        statusSpan.classList.add("is-selected");
+        statusSpan.innerHTML = `<span>✓ Selected: ${escapeHtml(opt.operator)} (${opt.price ? "₹" + Math.round(opt.price).toLocaleString("en-IN") + " per person" : "fare not provided"})</span>`;
       }
       document.querySelectorAll("#outboundTransportList .transport-option-card").forEach(c => {
         c.classList.toggle("selected", c.id === `transport-${opt.id}`);
@@ -812,7 +932,8 @@ class ItineraryPlannerController {
       this.selectedReturn = opt;
       const statusSpan = document.getElementById("selectedReturnStatus");
       if (statusSpan) {
-        statusSpan.innerHTML = `<span style="color:var(--color-primary);">✓ Selected: ${escapeHtml(opt.operator)} (${opt.price ? "₹" + Math.round(opt.price).toLocaleString("en-IN") + " per person" : "fare not provided"})</span>`;
+        statusSpan.classList.add("is-selected");
+        statusSpan.innerHTML = `<span>✓ Selected: ${escapeHtml(opt.operator)} (${opt.price ? "₹" + Math.round(opt.price).toLocaleString("en-IN") + " per person" : "fare not provided"})</span>`;
       }
       document.querySelectorAll("#returnTransportList .transport-option-card").forEach(c => {
         c.classList.toggle("selected", c.id === `transport-${opt.id}`);
@@ -1228,7 +1349,8 @@ class ItineraryPlannerController {
 
   buildHotelCard(h, isSelected, index, block, info = null) {
     const card = document.createElement("article");
-    card.className = "hotel-card" + (isSelected ? " selected" : "");
+    const isRecommended = (h.recommendation_labels && h.recommendation_labels.length > 0) || !!(info && info.bestMatch);
+    card.className = "hotel-card" + (isRecommended ? " is-recommended" : "") + (isSelected ? " selected" : "");
     card.id = `hotel-${index}-${h.id}`;
     const labelsHtml = (h.recommendation_labels || []).map(l => {
       let cls = "hotel-tag";
@@ -1706,17 +1828,18 @@ class ItineraryPlannerController {
 
     // 1. Header with PDF download and actions
     const headerRow = document.createElement("div");
-    headerRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;";
+    headerRow.className = "itinerary-overview-header";
     headerRow.innerHTML = `
       <div>
-        <h2 style="font-size:1.6rem;font-family:var(--font-heading);margin-bottom:4px;color:var(--color-text-primary);">
+        <span class="itinerary-section-kicker">🗺️ Trip Overview</span>
+        <h2 class="itinerary-result-title">
           ${escapeHtml(data.title)}
         </h2>
-        <div style="font-size:0.9rem;color:var(--color-text-muted);">
+        <div class="itinerary-result-overview">
           ${escapeHtml(data.trip_overview)}
         </div>
       </div>
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;flex-shrink:0;">
         <button type="button" class="btn btn-secondary btn-sm" id="btnDownloadItineraryPdf">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span>Download PDF</span>
@@ -1762,28 +1885,51 @@ class ItineraryPlannerController {
     };
 
     journeyCard.innerHTML = `
-      <h3 style="font-size:1.15rem;color:var(--color-primary);margin-bottom:12px;">🚆 Verified Journey & Accommodation</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;">
-        <div style="background:var(--color-surface-soft);padding:12px;border-radius:var(--radius-md);">
-          <strong>Outbound Transit:</strong><br/>
-          ${ob ? `${escapeHtml(ob.operator)} (${escapeHtml(ob.number || '')})<br/>${escapeHtml(ob.departure_time)} → ${escapeHtml(ob.arrival_time)}<br/><span style="color:var(--color-primary);font-weight:700;">${ob.price ? "₹" + Math.round(ob.price).toLocaleString("en-IN") + " per person (live quote)" : "Fare not provided"}</span>` : 'Not specified'}
-          ${ob && ob.booking_url ? `<br/><a href="${escapeHtml(ob.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Provider Booking Link ↗</a>` : ''}
+      <div class="itinerary-section-header">
+        <span class="itinerary-section-icon" aria-hidden="true">🚆</span>
+        <div>
+          <h3>Verified Journey &amp; Accommodation</h3>
+          <p class="itinerary-section-sub">Your selected outbound &amp; return transport and stay details.</p>
         </div>
-        <div style="background:var(--color-surface-soft);padding:12px;border-radius:var(--radius-md);">
-          <strong>Return Transit:</strong><br/>
-          ${ib ? `${escapeHtml(ib.operator)} (${escapeHtml(ib.number || '')})<br/>${escapeHtml(ib.departure_time)} → ${escapeHtml(ib.arrival_time)}<br/><span style="color:var(--color-primary);font-weight:700;">${ib.price ? "₹" + Math.round(ib.price).toLocaleString("en-IN") + " per person (live quote)" : "Fare not provided"}</span>` : 'One-way / Not specified'}
-          ${ib && ib.booking_url ? `<br/><a href="${escapeHtml(ib.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Provider Booking Link ↗</a>` : ''}
+      </div>
+      <div class="journey-summary-grid">
+        <div class="journey-tile journey-tile-outbound">
+          <div class="journey-tile-head"><span class="leg-pill leg-pill-outbound">OUTBOUND &rarr;</span><strong>Outbound Transit</strong></div>
+          <div class="journey-tile-body">
+            ${ob ? `${escapeHtml(ob.operator)} (${escapeHtml(ob.number || '')})<br/>${escapeHtml(ob.departure_time)} → ${escapeHtml(ob.arrival_time)}<br/><span class="journey-price">${ob.price ? "₹" + Math.round(ob.price).toLocaleString("en-IN") + " per person (live quote)" : "Fare not provided"}</span>` : 'Not specified'}
+            ${ob && ob.booking_url ? `<br/><a href="${escapeHtml(ob.booking_url)}" target="_blank" rel="noopener noreferrer" class="journey-booking-link">Provider Booking Link ↗</a>` : ''}
+          </div>
         </div>
-        <div style="background:var(--color-surface-soft);padding:12px;border-radius:var(--radius-md);">
-          <strong>Accommodation:</strong><br/>
-          ${hasStays ? buildStaysSummaryHtml(data) : htl ? `<b>${escapeHtml(htl.name)}</b> (★ ${htl.rating || 'N/A'})<br/>${escapeHtml(htl.address || '')}<br/><span style="color:var(--color-primary);font-weight:700;">₹${htl.nightly_price || 0}/night (Total: ₹${htl.total_price || 0})</span>` : '<em>Not selected (self-arranged)</em>'}
-          ${!hasStays && htl && htl.booking_url ? `<br/><a href="${escapeHtml(htl.booking_url)}" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem;color:var(--color-accent);font-weight:600;">Hotel Booking Link ↗</a>` : ''}
+        <div class="journey-tile journey-tile-return">
+          <div class="journey-tile-head"><span class="leg-pill leg-pill-return">&larr; RETURN</span><strong>Return Transit</strong></div>
+          <div class="journey-tile-body">
+            ${ib ? `${escapeHtml(ib.operator)} (${escapeHtml(ib.number || '')})<br/>${escapeHtml(ib.departure_time)} → ${escapeHtml(ib.arrival_time)}<br/><span class="journey-price">${ib.price ? "₹" + Math.round(ib.price).toLocaleString("en-IN") + " per person (live quote)" : "Fare not provided"}</span>` : 'One-way / Not specified'}
+            ${ib && ib.booking_url ? `<br/><a href="${escapeHtml(ib.booking_url)}" target="_blank" rel="noopener noreferrer" class="journey-booking-link">Provider Booking Link ↗</a>` : ''}
+          </div>
+        </div>
+        <div class="journey-tile journey-tile-hotel">
+          <div class="journey-tile-head"><span class="leg-pill leg-pill-hotel">STAY</span><strong>Accommodation</strong></div>
+          <div class="journey-tile-body">
+            ${hasStays ? buildStaysSummaryHtml(data) : htl ? `<b>${escapeHtml(htl.name)}</b> (★ ${htl.rating || 'N/A'})<br/>${escapeHtml(htl.address || '')}<br/><span class="journey-price">₹${htl.nightly_price || 0}/night (Total: ₹${htl.total_price || 0})</span>` : '<em>Not selected (self-arranged)</em>'}
+            ${!hasStays && htl && htl.booking_url ? `<br/><a href="${escapeHtml(htl.booking_url)}" target="_blank" rel="noopener noreferrer" class="journey-booking-link">Hotel Booking Link ↗</a>` : ''}
+          </div>
         </div>
       </div>
     `;
     container.appendChild(journeyCard);
 
     // 3. Day-by-Day Itinerary Schedule
+    const daysHeading = document.createElement("div");
+    daysHeading.className = "itinerary-section-header itinerary-days-heading";
+    daysHeading.innerHTML = `
+      <span class="itinerary-section-icon" aria-hidden="true">🗓️</span>
+      <div>
+        <h3>Day-by-Day Plan</h3>
+        <p class="itinerary-section-sub">${(data.days || []).length} day${(data.days || []).length === 1 ? "" : "s"} planned with verified places, meal stops, and step-by-step directions.</p>
+      </div>
+    `;
+    container.appendChild(daysHeading);
+
     const daysContainer = document.createElement("div");
     daysContainer.className = "itinerary-days-stack";
 
@@ -1912,8 +2058,13 @@ class ItineraryPlannerController {
     const cb = data.cost_breakdown || {};
 
     costCard.innerHTML = `
-      <h3 style="font-size:1.25rem;color:var(--color-text-primary);margin-bottom:8px;">Itemized Cost Summary</h3>
-      <p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:12px;">Clearly distinguishes actual provider live quotes from estimated expenses.</p>
+      <div class="itinerary-section-header">
+        <span class="itinerary-section-icon" aria-hidden="true">💰</span>
+        <div>
+          <h3>Estimated Budget &amp; Cost Breakdown</h3>
+          <p class="itinerary-section-sub">Clearly distinguishes actual provider live quotes from estimated expenses.</p>
+        </div>
+      </div>
       <table class="cost-table">
         <thead>
           <tr>
@@ -1959,17 +2110,28 @@ class ItineraryPlannerController {
     // Newer itineraries carry a full breakdown: headline numbers + a button for the details
     if (cb.detail) {
       costCard.innerHTML = `
-        <h3 style="font-size:1.25rem;color:var(--color-text-primary);margin-bottom:8px;">Trip budget</h3>
-        <p style="font-size:0.9rem;color:var(--color-text-muted);margin-bottom:12px;">Flight and hotel numbers are provider quotes; everything else is an estimate from your daily budget.</p>
+        <div class="itinerary-section-header">
+          <span class="itinerary-section-icon" aria-hidden="true">💰</span>
+          <div>
+            <h3>Estimated Budget Breakdown</h3>
+            <p class="itinerary-section-sub">Flight and hotel numbers are provider quotes; everything else is an estimate from your daily budget.</p>
+          </div>
+        </div>
         ${buildBudgetSummaryHtml(cb)}
-        <button type="button" class="btn btn-primary" id="btnBudgetBreakdown" aria-expanded="false" style="margin-top:12px;">View total price breakdown</button>
+        <button type="button" class="btn btn-primary" id="btnBudgetBreakdown" aria-expanded="false" style="margin-top:14px;">View total price breakdown</button>
         <div id="budgetBreakdown" hidden>${buildBudgetBreakdownHtml(cb)}</div>`;
       const toggle = costCard.querySelector("#btnBudgetBreakdown");
       const panel = costCard.querySelector("#budgetBreakdown");
-      toggle.addEventListener("click", () => {
-        panel.hidden = !panel.hidden;
+      const syncBudgetPanel = () => {
+        panel.hidden = !this._budgetBreakdownOpen;
         toggle.textContent = panel.hidden ? "View total price breakdown" : "Hide price breakdown";
         toggle.setAttribute("aria-expanded", String(!panel.hidden));
+      };
+      syncBudgetPanel();
+      toggle.addEventListener("click", () => {
+        this._budgetBreakdownOpen = panel.hidden;
+        syncBudgetPanel();
+        this.persistSessionState();
       });
     }
     container.appendChild(costCard);
@@ -2049,7 +2211,7 @@ class ItineraryPlannerController {
     const result = wrap.querySelector("#quickVersionResult");
     const openBtn = wrap.querySelector("#btnQuickVersion");
 
-    openBtn.addEventListener("click", () => {
+    const showQuick = (shouldScroll = true) => {
       result.innerHTML = `
         ${buildQuickVersionHtml(data)}
         <div class="qv-actions">
@@ -2058,12 +2220,14 @@ class ItineraryPlannerController {
         </div>`;
       result.hidden = false;
       openBtn.textContent = "Refresh quick version";
-      result.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (shouldScroll) result.scrollIntoView({ behavior: "smooth", block: "start" });
 
       result.querySelector("#btnHideQuick").addEventListener("click", () => {
         result.hidden = true;
         result.innerHTML = "";
         openBtn.textContent = "Generate quick version";
+        this._quickVersionOpen = false;
+        this.persistSessionState();
       });
 
       const pdfBtn = result.querySelector("#btnQuickPdf");
@@ -2105,7 +2269,17 @@ class ItineraryPlannerController {
           pdfBtn.innerHTML = original;
         }
       });
+    };
+
+    openBtn.addEventListener("click", () => {
+      this._quickVersionOpen = true;
+      showQuick(true);
+      this.persistSessionState();
     });
+
+    if (this._quickVersionOpen) {
+      showQuick(false);
+    }
     return wrap;
   }
 
@@ -2145,7 +2319,10 @@ class ItineraryPlannerController {
       anchors: this.anchors,
       scope: { info: this.scopeInfo, for: this.scopeFor, state: this.scopeState },
       transportDestination: this.transportDestination,
-      rooms: this.rooms,
+      rooms: live ? (parseInt(val("itineraryRooms"), 10) || null) : this.rooms,
+      trainDetailsOpen: !!document.getElementById("trainDetails")?.open,
+      budgetBreakdownOpen: !!this._budgetBreakdownOpen,
+      quickVersionOpen: !!this._quickVersionOpen,
       tripPrefs: this.prefs,
       prefs: {
         budget: val("itineraryBudgetInput"),
@@ -2174,9 +2351,8 @@ class ItineraryPlannerController {
   }
 
   persistSessionState() {
-    try {
-      sessionStorage.setItem("slg_session_itinerary", JSON.stringify(this.collectDraftState()));
-    } catch (_) {}
+    if (this._isRestoring) return;
+    saveServiceState("itinerary", this.collectDraftState(), { legacySessionKey: "slg_session_itinerary" });
   }
 
   applyPrefs(prefs) {
@@ -2201,91 +2377,117 @@ class ItineraryPlannerController {
     if (this.bakeryPicker && prefs.bakery) this.bakeryPicker.setTags(prefs.bakery);
   }
 
-  restoreSessionState() {
+  restoreSessionState(explicitData = null) {
     try {
-      const raw = sessionStorage.getItem("slg_session_itinerary");
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (!data || (!data.destination && !data.source)) return;
+      const data = explicitData || loadServiceState("itinerary", {
+        legacySessionKey: "slg_session_itinerary",
+        consumeHandoff: true
+      });
+      if (!data) return;
+      const hasAnyData = !!(
+        data.destination || data.source || data.finalItinerary || data.transportData ||
+        data.outboundDate || data.returnDate || data.rooms || (data.trainClasses && data.trainClasses.length)
+      );
+      if (!hasAnyData) return;
 
-      this.source = data.source || "";
-      this.destination = data.destination || "";
-      this.outboundDate = data.outboundDate || "";
-      this.returnDate = data.returnDate || "";
-      this.travelers = data.travelers || 1;
-      this.preference = data.preference || "best-overall";
-      this.transportData = data.transportData;
-      this.trainClasses = Array.isArray(data.trainClasses) ? data.trainClasses : [];
-      this.fromStationCode = data.fromStationCode || "";
-      this.toStationCode = data.toStationCode || "";
-      this.stations = data.stations || { from: [], to: [] };
-      this.dateStrips = data.dateStrips || { outbound: null, return: null };
-      this.applyTrainPreferencesToForm();
-      this.selectedOutbound = data.selectedOutbound;
-      this.selectedReturn = data.selectedReturn;
-      this.selectedHotel = data.selectedHotel;
-      this.hotelSkipped = data.hotelSkipped;
-      this.finalItinerary = data.finalItinerary;
-      this.hotelData = data.hotelData || [];
-      this.skeleton = data.skeleton || null;
-      this.stayChoices = data.stayChoices || {};
-      this.transferChoices = data.transferChoices || {};
-      this.anchors = data.anchors || {};
-      this.transportDestination = data.transportDestination || "";
-      this.rooms = data.rooms || null;
-      this.prefs = data.tripPrefs || {};
-      if (data.scope && data.scope.info) {
-        this.scopeInfo = data.scope.info;
-        this.scopeFor = data.scope.for || "";
-        this.scopeState = data.scope.state || this.scopeState;
-        this.renderScopePanel();
-      }
-      const roomsInput = document.getElementById("itineraryRooms");
-      if (roomsInput && this.rooms) roomsInput.value = this.rooms;
-      this.applyPrefs(data.prefs);
+      this._isRestoring = true;
+      this._hasRestored = true;
+      try {
+        this.source = data.source || "";
+        this.destination = data.destination || "";
+        this.outboundDate = data.outboundDate || "";
+        this.returnDate = data.returnDate || "";
+        this.travelers = data.travelers || 1;
+        this.preference = data.preference || "best-overall";
+        this.transportData = data.transportData;
+        this.trainClasses = Array.isArray(data.trainClasses) ? data.trainClasses : [];
+        this.fromStationCode = data.fromStationCode || "";
+        this.toStationCode = data.toStationCode || "";
+        this.stations = data.stations || { from: [], to: [] };
+        this.dateStrips = data.dateStrips || { outbound: null, return: null };
+        this.applyTrainPreferencesToForm();
+        this.selectedOutbound = data.selectedOutbound;
+        this.selectedReturn = data.selectedReturn;
+        this.selectedHotel = data.selectedHotel;
+        this.hotelSkipped = data.hotelSkipped;
+        this.finalItinerary = data.finalItinerary;
+        this.hotelData = data.hotelData || [];
+        this.skeleton = data.skeleton || null;
+        this.stayChoices = data.stayChoices || {};
+        this.transferChoices = data.transferChoices || {};
+        this.anchors = data.anchors || {};
+        this.transportDestination = data.transportDestination || "";
+        this.rooms = data.rooms || null;
+        this.prefs = data.tripPrefs || {};
+        this._budgetBreakdownOpen = !!data.budgetBreakdownOpen;
+        this._quickVersionOpen = !!data.quickVersionOpen;
 
-      // Restore form inputs
-      const srcInput = document.getElementById("itinerarySource");
-      const dstInput = document.getElementById("itineraryDest");
-      const depInput = document.getElementById("itineraryDepDate");
-      const retInput = document.getElementById("itineraryRetDate");
-      const travelersInput = document.getElementById("itineraryTravelers");
-      const prefSelect = document.getElementById("itineraryPreference");
-
-      if (srcInput) srcInput.value = this.source;
-      if (dstInput) dstInput.value = this.destination;
-      if (depInput) depInput.value = this.outboundDate;
-      if (retInput) retInput.value = this.returnDate;
-      if (travelersInput) travelersInput.value = this.travelers;
-      if (prefSelect) prefSelect.value = this.preference;
-
-      if (this.finalItinerary) {
-        const resultsContainer = document.getElementById("itineraryResults");
-        this.renderFinalItinerary(resultsContainer, this.finalItinerary);
-        this.setStep(5);
-      } else if (this.transportData) {
-        this.renderTransportLeg("outbound", this.transportData.outbound, { fetchStrip: false });
-        if (this.transportData.return_leg) {
-          this.renderTransportLeg("return", this.transportData.return_leg, { fetchStrip: false });
-        }
-        if (this.selectedOutbound) {
-          this.selectTransportOption("outbound", this.selectedOutbound);
-        }
-        if (this.selectedReturn) {
-          this.selectTransportOption("return", this.selectedReturn);
+        const trainDetails = document.getElementById("trainDetails");
+        if (trainDetails && typeof data.trainDetailsOpen === "boolean") {
+          trainDetails.open = data.trainDetailsOpen;
         }
 
-        const step = data.currentStep || 2;
-        if (this.skeleton && step === 3) {
-          this.renderStayBlocks();
-          this.setStep(3);
-        } else if (step === 4) {
-          this.setStep(4);
-        } else {
-          this.setStep(2);
+        if (data.scope && data.scope.info) {
+          this.scopeInfo = data.scope.info;
+          this.scopeFor = data.scope.for || "";
+          this.scopeState = data.scope.state || this.scopeState;
+          this.renderScopePanel();
         }
+        const roomsInput = document.getElementById("itineraryRooms");
+        if (roomsInput && this.rooms) roomsInput.value = this.rooms;
+        this.applyPrefs(data.prefs);
+
+        // Restore form inputs
+        const srcInput = document.getElementById("itinerarySource");
+        const dstInput = document.getElementById("itineraryDest");
+        const depInput = document.getElementById("itineraryDepDate");
+        const retInput = document.getElementById("itineraryRetDate");
+        const travelersInput = document.getElementById("itineraryTravelers");
+        const prefSelect = document.getElementById("itineraryPreference");
+
+        if (srcInput) srcInput.value = this.source;
+        if (dstInput) dstInput.value = this.destination;
+        if (depInput && this.outboundDate) depInput.value = this.outboundDate;
+        if (retInput && this.returnDate) retInput.value = this.returnDate;
+        if (travelersInput) travelersInput.value = this.travelers;
+        if (prefSelect) prefSelect.value = this.preference;
+
+        const summaryBadge = document.getElementById("transportRouteSummaryBadge");
+        if (summaryBadge && this.source && this.destination && this.outboundDate) {
+          summaryBadge.textContent = `${this.source} → ${this.destination} (${this.outboundDate} to ${this.returnDate || this.outboundDate})`;
+        }
+
+        if (this.finalItinerary) {
+          const resultsContainer = document.getElementById("itineraryResults");
+          this.renderFinalItinerary(resultsContainer, this.finalItinerary);
+          this.setStep(5);
+        } else if (this.transportData) {
+          this.renderTransportLeg("outbound", this.transportData.outbound, { fetchStrip: false });
+          if (this.transportData.return_leg) {
+            this.renderTransportLeg("return", this.transportData.return_leg, { fetchStrip: false });
+          }
+          if (this.selectedOutbound) {
+            this.selectTransportOption("outbound", this.selectedOutbound);
+          }
+          if (this.selectedReturn) {
+            this.selectTransportOption("return", this.selectedReturn);
+          }
+
+          const step = data.currentStep || 2;
+          if (this.skeleton && step === 3) {
+            this.renderStayBlocks();
+            this.setStep(3);
+          } else if (step === 4) {
+            this.setStep(4);
+          } else {
+            this.setStep(2);
+          }
+        }
+      } finally {
+        this._isRestoring = false;
       }
     } catch (err) {
+      this._isRestoring = false;
       console.warn("Failed to restore itinerary session state:", err);
     }
   }

@@ -7,6 +7,7 @@ import { api } from "../api.js";
 import { modal } from "./modal.js";
 import { toast } from "./toast.js";
 import { escapeHtml, formatDateTime } from "../utils/formatters.js";
+import { setExplicitServiceHandoff } from "../state.js";
 
 export function renderHistoryItem(item, onDeleteCallback) {
   const card = document.createElement("div");
@@ -159,14 +160,14 @@ function openReconstructedModal(item) {
           hotelSkipped: !payload.selected_hotel,
           finalItinerary: payload.days ? payload : null
         };
-        sessionStorage.setItem("slg_session_itinerary", JSON.stringify(session));
+        setExplicitServiceHandoff("itinerary", session, { legacySessionKey: "slg_session_itinerary" });
         go("itinerary.html");
       } else if (type === "places" || type === "cafes" || type === "medical") {
         // Same key + snapshot shape that NearbyExplorerController reads
-        sessionStorage.setItem(`slg_${type}_state`, JSON.stringify(payload));
+        setExplicitServiceHandoff(type, payload, { legacySessionKey: `slg_${type}_state` });
         go(`${type}.html`);
       } else if (type === "area") {
-        sessionStorage.setItem("slg_area_state", JSON.stringify(payload));
+        setExplicitServiceHandoff("area", payload, { legacySessionKey: "slg_area_state" });
         go("area.html");
       }
     });

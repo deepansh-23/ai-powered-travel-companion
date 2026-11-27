@@ -13,17 +13,28 @@ export function renderFilterChips(container, countsObj, onToggleCallback) {
   let totalCount = 0;
   Object.values(countsObj || {}).forEach(cnt => { totalCount += cnt; });
 
+  const syncChipVisuals = () => {
+    container.querySelectorAll(".filter-chip[data-filter-key]").forEach(btn => {
+      const k = btn.dataset.filterKey;
+      const active = state.activeFilters.has(k);
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-checked", String(active));
+    });
+  };
+
   const allChip = document.createElement("button");
   const isAllActive = state.activeFilters.has("all");
   allChip.className = `filter-chip ${isAllActive ? "active" : ""}`;
+  allChip.dataset.filterKey = "all";
   allChip.setAttribute("role", "checkbox");
-  allChip.setAttribute("aria-checked", isAllActive);
+  allChip.setAttribute("aria-checked", String(isAllActive));
   allChip.innerHTML = `
     <span>All</span>
     <span class="chip-count">${totalCount}</span>
   `;
   allChip.addEventListener("click", () => {
     state.setFilter("all");
+    syncChipVisuals();
     if (onToggleCallback) onToggleCallback();
   });
   container.appendChild(allChip);
@@ -31,10 +42,12 @@ export function renderFilterChips(container, countsObj, onToggleCallback) {
   // 2. Individual Category / Amenity / Service chips
   Object.entries(countsObj || {}).forEach(([key, count]) => {
     const chip = document.createElement("button");
-    const isActive = state.activeFilters.has(key.toLowerCase());
+    const lowerKey = key.toLowerCase();
+    const isActive = state.activeFilters.has(lowerKey);
     chip.className = `filter-chip ${isActive ? "active" : ""}`;
+    chip.dataset.filterKey = lowerKey;
     chip.setAttribute("role", "checkbox");
-    chip.setAttribute("aria-checked", isActive);
+    chip.setAttribute("aria-checked", String(isActive));
 
     chip.innerHTML = `
       <span>${escapeHtml(titleCase(key))}</span>
@@ -42,7 +55,8 @@ export function renderFilterChips(container, countsObj, onToggleCallback) {
     `;
 
     chip.addEventListener("click", () => {
-      state.setFilter(key.toLowerCase());
+      state.setFilter(lowerKey);
+      syncChipVisuals();
       if (onToggleCallback) onToggleCallback();
     });
 

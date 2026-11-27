@@ -4,6 +4,7 @@
  */
 
 import { api } from "../api.js";
+import { loadServiceState, createServicePersister, hasResolvedWorkspaceScope } from "../state.js";
 import { toast } from "../components/toast.js";
 import { escapeHtml, formatDateTime } from "../utils/formatters.js";
 import { authManager } from "../components/auth.js";
@@ -54,9 +55,77 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let allItems = [];
   let activeFilter = "All";
+  let hasRestored = false;
+  let userInteracted = false;
+  let isRestoring = false;
+
   const filterBar = document.getElementById("reviewFilterBar");
   const chipsBox = document.getElementById("reviewServiceChips");
-  const serviceChips = chipsBox ? renderServiceChips(chipsBox, []) : null;
+  const ratingSelect = document.getElementById("reviewRating");
+  const commentInput = document.getElementById("reviewComment");
+
+  let serviceChips = null;
+
+  const collectReviewsWorkspace = () => ({
+    activeFilter,
+    draft: {
+      rating: ratingSelect ? parseInt(ratingSelect.value, 10) || 5 : 5,
+      services: serviceChips ? serviceChips.getSelected() : [],
+      comment: commentInput ? commentInput.value : ""
+    }
+  });
+
+  const persister = createServicePersister("reviews", collectReviewsWorkspace, {
+    debounceMs: 250,
+    shouldSave: () => !isRestoring && (hasRestored || userInteracted)
+  });
+
+  const onDraftChange = () => {
+    if (isRestoring) return;
+    userInteracted = true;
+    persister.scheduleSave();
+  };
+
+  serviceChips = chipsBox ? renderServiceChips(chipsBox, [], onDraftChange) : null;
+  if (ratingSelect) ratingSelect.addEventListener("change", onDraftChange);
+  if (commentInput) commentInput.addEventListener("input", onDraftChange);
+
+  function restoreReviewsState() {
+    if (hasRestored || userInteracted) return;
+    const saved = loadServiceState("reviews");
+    if (!saved) return;
+    isRestoring = true;
+    hasRestored = true;
+    try {
+      if (typeof saved.activeFilter === "string" && saved.activeFilter) {
+        activeFilter = saved.activeFilter;
+      }
+      if (saved.draft) {
+        if (ratingSelect && saved.draft.rating) {
+          ratingSelect.value = String(saved.draft.rating);
+        }
+        if (serviceChips && Array.isArray(saved.draft.services)) {
+          serviceChips.setSelected(saved.draft.services);
+        }
+        if (commentInput && typeof saved.draft.comment === "string") {
+          commentInput.value = saved.draft.comment;
+        }
+      }
+    } finally {
+      isRestoring = false;
+    }
+    if (allItems.length) {
+      renderFilterBar();
+      renderList();
+    }
+  }
+
+  if (hasResolvedWorkspaceScope() || authManager.ready) {
+    restoreReviewsState();
+  }
+  if (!authManager.ready) {
+    window.addEventListener("slg:auth-ready", restoreReviewsState, { once: true });
+  }
 
   function renderFilterBar() {
     if (!filterBar) return;
@@ -75,7 +144,9 @@ document.addEventListener("DOMContentLoaded", () => {
     filterBar.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-filter]");
       if (!btn) return;
+      userInteracted = true;
       activeFilter = btn.dataset.filter;
+      persister.saveNow();
       renderFilterBar();
       renderList();
     });
@@ -185,6 +256,8 @@ document.addEventListener("DOMContentLoaded", () => {
         toast.success(`Thank you! Your review has been saved for ${saved.length} service${saved.length > 1 ? "s" : ""}.`);
         form.reset();
         serviceChips && serviceChips.setSelected([]);
+        // Clear draft after successful submission while keeping activeFilter intact
+        persister.saveNow();
         await loadReviews();
       } catch (err) {
         toast.error("Failed to submit review: " + err.message);

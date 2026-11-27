@@ -53,12 +53,82 @@
   flex-wrap: wrap;
 }
 
-/* Feature Grid */
+/* Featured Flagship Section & Core Services Grid */
+.home-featured-section {
+  margin: var(--space-lg) 0 var(--space-2xl);
+}
+
+.feature-card-featured {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xl);
+  border: 2px solid color-mix(in srgb, var(--color-primary) 50%, var(--color-border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)),
+    var(--color-surface) 60%
+  );
+  box-shadow: var(--shadow-md);
+}
+
+.feature-featured-left {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  min-width: 0;
+  flex: 1;
+}
+
+.feature-featured-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.feature-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.feature-title-row .feature-title {
+  margin-bottom: 0;
+}
+
+.feature-card-featured .feature-description {
+  margin-bottom: 0;
+}
+
+.feature-icon-featured {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.feature-card-featured .feature-featured-cta {
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: #ffffff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.feature-card-featured:hover .feature-featured-cta {
+  background-color: var(--color-primary-hover);
+}
+
+.home-section {
+  padding: var(--space-2xl) 0;
+  border-top: 1px solid var(--color-border);
+}
+
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-lg);
-  margin: var(--space-2xl) 0;
+  margin: 0;
 }
 
 .feature-card {
@@ -70,6 +140,8 @@
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  box-shadow: var(--shadow-sm);
 }
 
 .feature-card:hover {
@@ -90,6 +162,15 @@
   margin-bottom: var(--space-md);
 }
 
+.feature-icon-medical {
+  background-color: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
+  color: var(--color-danger);
+}
+
+.feature-card-medical:hover {
+  border-color: var(--color-danger);
+}
+
 .feature-title {
   font-size: 1.2rem;
   font-weight: 700;
@@ -100,7 +181,7 @@
 .feature-description {
   font-size: 0.925rem;
   color: var(--color-text-secondary);
-  line-height: 1.5;
+  line-height: 1.55;
   margin-bottom: var(--space-md);
   flex: 1;
 }
@@ -122,19 +203,31 @@
 
 .section-header {
   text-align: center;
-  max-width: 640px;
+  max-width: 680px;
   margin: 0 auto var(--space-xl) auto;
+}
+
+.section-header h2 {
+  margin-bottom: 8px;
 }
 
 .steps-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-lg);
 }
 
 .step-item {
   text-align: center;
-  padding: var(--space-lg);
+  padding: var(--space-xl) var(--space-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.step-item h3 {
+  margin-bottom: 8px;
 }
 
 .step-number {
@@ -768,21 +861,312 @@
 }
 
 .hotel-tag.cheapest {
-  background-color: #FEF3C7;
-  color: #92400E;
-  border-color: #F59E0B;
+  background-color: color-mix(in srgb, var(--color-warning) 16%, var(--color-surface));
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 55%, transparent);
 }
 
 .hotel-tag.best-rated {
-  background-color: #D1FAE5;
-  color: #065F46;
-  border-color: #10B981;
+  background-color: color-mix(in srgb, var(--color-success) 16%, var(--color-surface));
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 55%, transparent);
 }
 
 .hotel-tag.best-value {
-  background-color: #EDE9FE;
-  color: #5B21B6;
-  border-color: #8B5CF6;
+  background-color: color-mix(in srgb, var(--color-primary) 16%, var(--color-surface));
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+/* Recommended / Best Pick Cards */
+.transport-option-card.is-recommended,
+.hotel-card.is-recommended {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  background-color: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
+  box-shadow: var(--shadow-md);
+}
+
+/* Outbound vs. Return Transport Leg Sections */
+.transport-leg-card {
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.transport-leg-card.transport-leg-outbound {
+  border-top: 4px solid var(--color-primary);
+}
+
+.transport-leg-card.transport-leg-return {
+  border-top: 4px solid var(--color-accent);
+  margin-top: var(--space-lg);
+}
+
+.transport-leg-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  margin: calc(var(--space-lg) * -1) calc(var(--space-lg) * -1) var(--space-lg) calc(var(--space-lg) * -1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.transport-leg-banner.outbound {
+  background-color: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface));
+  border-left: 4px solid var(--color-primary);
+}
+
+.transport-leg-banner.return {
+  background-color: color-mix(in srgb, var(--color-accent) 11%, var(--color-surface));
+  border-left: 4px solid var(--color-accent);
+}
+
+.transport-leg-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.transport-leg-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.transport-leg-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.transport-leg-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.transport-leg-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.transport-leg-meta {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.leg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.leg-pill-outbound {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.leg-pill-return {
+  background-color: var(--color-accent);
+  color: #ffffff;
+}
+
+.leg-pill-hotel {
+  background-color: color-mix(in srgb, var(--color-info) 18%, var(--color-surface));
+  color: var(--color-info);
+  border: 1px solid color-mix(in srgb, var(--color-info) 40%, transparent);
+}
+
+.transport-leg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.transport-leg-status.is-selected {
+  background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.transport-leg-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: var(--space-xl) 0 var(--space-md);
+  color: var(--color-accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.transport-leg-divider::before,
+.transport-leg-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-border-strong), transparent);
+}
+
+/* Major Itinerary Result Section Headers & Journey Summary Tiles */
+.itinerary-overview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.itinerary-section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-primary);
+  margin-bottom: 4px;
+}
+
+.itinerary-result-title {
+  font-size: clamp(1.4rem, 2.5vw, 1.75rem);
+  font-family: var(--font-heading);
+  margin-bottom: 6px;
+  color: var(--color-text-primary);
+}
+
+.itinerary-result-overview {
+  font-size: 0.94rem;
+  color: var(--color-text-secondary);
+  max-width: 780px;
+}
+
+.itinerary-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.itinerary-section-header h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 2px 0;
+}
+
+.itinerary-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.itinerary-section-sub {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.itinerary-days-heading {
+  margin-top: var(--space-xl);
+  margin-bottom: var(--space-lg);
+}
+
+.journey-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-md);
+}
+
+.journey-tile {
+  background-color: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.journey-tile-outbound {
+  border-left-color: var(--color-primary);
+}
+
+.journey-tile-return {
+  border-left-color: var(--color-accent);
+}
+
+.journey-tile-hotel {
+  border-left-color: var(--color-info);
+}
+
+.journey-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.journey-tile-body {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.journey-price {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.journey-booking-link {
+  font-size: 0.82rem;
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 /* Cost Summary Table */

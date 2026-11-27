@@ -189,6 +189,10 @@ async def patch_user(
     if target is None:
         raise LookupError("User not found.")
 
+    from app.services import auth_service
+    if auth_service.is_env_admin(target) and (is_active is False or is_admin is False):
+        raise PermissionError(auth_service.ENV_ADMIN_PROTECTED_MSG)
+
     if target_id == acting_admin_id:
         if is_active is False:
             raise ValueError("You cannot deactivate your own account.")
@@ -231,6 +235,10 @@ async def delete_user(
     if target is None:
         raise LookupError("User not found.")
 
+    from app.services import auth_service
+    if auth_service.is_env_admin(target):
+        raise PermissionError(auth_service.ENV_ADMIN_PROTECTED_MSG)
+
     if getattr(target, "is_admin", False):
         remaining = await count_admins(db)
         if remaining <= 1:
@@ -271,6 +279,8 @@ async def reset_user_password(db: AsyncSession, target_id: str, acting_admin_id:
     target = (await db.execute(select(User).where(User.id == target_id))).scalar_one_or_none()
     if target is None:
         raise LookupError("User not found.")
+    if auth_service.is_env_admin(target):
+        raise PermissionError(auth_service.ENV_ADMIN_PROTECTED_MSG)
     if target_id == acting_admin_id:
         raise ValueError("Use the normal change-password option for your own account.")
     if getattr(target, "is_admin", False):

@@ -17,6 +17,10 @@ from app.services.captcha_service import captcha_service
 
 CAPTCHA_COOKIE = "slg_human"
 
+# Re-export canonical Argon2id password helpers from auth_service
+hash_password = auth_service.hash_password
+verify_password = auth_service.verify_password
+
 # ---------------------------------------------------------------- guest sessions
 # A guest session is a signed, expiring cookie. It proves "this browser chose guest mode"
 # so the planner and search tools work, but it is never linked to a user profile.

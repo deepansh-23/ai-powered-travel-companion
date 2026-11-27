@@ -3,6 +3,13 @@
  */
 
 import { api } from "../api.js";
+import {
+  saveServiceState,
+  loadServiceState,
+  clearServiceState,
+  createServicePersister,
+  hasResolvedWorkspaceScope
+} from "../state.js";
 import { authManager } from "../components/auth.js";
 import { noteGuestResult, showGuestBanner, saveGuestWorkAfterLogin } from "../components/guest-banner.js";
 import { toast } from "../components/toast.js";
@@ -12,8 +19,26 @@ import { initSavedSessions, forgetDraft } from "../components/saved-sessions.js"
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("areaForm");
+  const areaInputEl = document.getElementById("areaInput");
   const resultsContainer = document.getElementById("areaResults");
-  const STORAGE_KEY = "slg_area_state"; // temporary session state (not History)
+  const STORAGE_KEY = "slg_area_state"; // legacy sessionStorage mirror
+
+  let currentGuide = null;
+  let hasRestored = false;
+  let userInteracted = false;
+  let isRestoring = false;
+
+  const collectAreaWorkspace = () => {
+    const typed = areaInputEl ? areaInputEl.value : "";
+    if (!currentGuide && !typed.trim()) return null;
+    return currentGuide ? { ...currentGuide, area_input: typed } : { area_input: typed, draft_only: true };
+  };
+
+  const persister = createServicePersister("area", collectAreaWorkspace, {
+    debounceMs: 250,
+    legacySessionKey: STORAGE_KEY,
+    shouldSave: () => !isRestoring && (hasRestored || userInteracted || !!currentGuide)
+  });
 
   function renderPrompt() {
     announceServiceReset("Area Guide");
@@ -26,43 +51,65 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function saveSession(snapshot) {
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)); } catch (_) {}
+    currentGuide = snapshot && snapshot.sections && snapshot.quick_facts ? { ...snapshot } : currentGuide;
+    saveServiceState("area", snapshot, { legacySessionKey: STORAGE_KEY });
+  }
+
+  function loadSnapshot({ consumeHandoff = false } = {}) {
+    return loadServiceState("area", { legacySessionKey: STORAGE_KEY, consumeHandoff });
   }
 
   function restoreSession() {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return false;
-      const snap = JSON.parse(raw);
-      // Needs a full guide (older history records only stored the area name)
-      if (!snap || !snap.sections || !snap.quick_facts) {
-        const name = snap && (snap.area_input || snap.area);
-        if (name) {
-          document.getElementById("areaInput").value = name;
-          form.requestSubmit();
+      const snap = loadSnapshot({ consumeHandoff: true });
+      if (!snap) return false;
+      isRestoring = true;
+      hasRestored = true;
+      try {
+        // Needs a full guide (older history records only stored the area name)
+        if (!snap.sections || !snap.quick_facts) {
+          const name = snap.area_input || snap.area || "";
+          if (areaInputEl && name) areaInputEl.value = name;
+          // Only auto-submit legacy history records (never auto-submit a typed-only draft!)
+          if (name && !snap.draft_only && !("area_input" in snap && Object.keys(snap).length <= 2)) {
+            isRestoring = false;
+            form.requestSubmit();
+            return true;
+          }
+          renderPrompt();
           return true;
         }
-        return false;
+        currentGuide = { ...snap };
+        if (areaInputEl) areaInputEl.value = snap.area_input || snap.area_name || "";
+        renderAreaGuide(snap);
+        return true;
+      } finally {
+        isRestoring = false;
       }
-      document.getElementById("areaInput").value = snap.area_input || snap.area_name || "";
-      renderAreaGuide(snap);
-      return true;
     } catch (_) {
+      isRestoring = false;
       return false;
     }
   }
 
+  if (areaInputEl) {
+    areaInputEl.addEventListener("input", () => {
+      if (isRestoring) return;
+      userInteracted = true;
+      persister.scheduleSave();
+    });
+  }
+
   // Guests: warn that nothing is saved; after logging in the same guide is saved to History once
   const refreshGuestBanner = () => {
-    let snap = null;
-    try { snap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch (_) {}
+    if (!hasRestored && !userInteracted) restoreSession();
+    const snap = loadSnapshot();
     if (authManager.isGuest() && snap && snap.area_name) showGuestBanner(resultsContainer);
   };
   if (authManager.ready) refreshGuestBanner();
   else window.addEventListener("slg:auth-ready", refreshGuestBanner, { once: true });
   saveGuestWorkAfterLogin("area", () => {
-    let snap = null;
-    try { snap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch (_) {}
+    const snap = loadSnapshot();
     if (!snap || !snap.area_name) return null;
     return { feature_type: "area", title: `Area Guide: ${snap.area_name}`, preview: snap.character_summary, payload: snap };
   });
@@ -70,10 +117,12 @@ document.addEventListener("DOMContentLoaded", () => {
   initSavedSessions({
     service: "area",
     saveButtonId: "btnSaveSession",
-    hasActiveState: () => !!sessionStorage.getItem(STORAGE_KEY),
+    hasActiveState: () => {
+      const snap = loadSnapshot();
+      return !!(snap && snap.area_name);
+    },
     buildSave: () => {
-      let snap = null;
-      try { snap = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null"); } catch (_) {}
+      const snap = currentGuide || loadSnapshot();
       const has = !!snap && !!snap.area_name;
       return { hasContent: has, title: `Area Guide: ${has ? snap.area_name : ""}`.trim(), state: snap };
     }
@@ -82,12 +131,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnGenerateNew = document.getElementById("btnGenerateNew");
   if (btnGenerateNew) {
     btnGenerateNew.addEventListener("click", () => {
-      try { sessionStorage.removeItem(STORAGE_KEY); } catch (_) {}
+      currentGuide = null;
+      hasRestored = false;
+      userInteracted = false;
+      persister.clear();
+      clearServiceState("area", { legacySessionKey: STORAGE_KEY });
       forgetDraft("area");
       document.querySelectorAll(".guest-save-banner").forEach((n) => n.remove());
-      document.getElementById("areaInput").value = "";
+      if (areaInputEl) {
+        areaInputEl.value = "";
+        areaInputEl.focus();
+      }
       renderPrompt();
-      document.getElementById("areaInput").focus();
     });
   }
 
@@ -134,8 +189,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Restore this session's guide (or a History item) instead of auto-searching
-    if (!restoreSession()) renderPrompt();
+    // Restore this session's guide (or a History item) when scope is known; otherwise wait for auth-ready
+    if (hasResolvedWorkspaceScope() || authManager.ready) {
+      if (!restoreSession()) renderPrompt();
+    } else {
+      renderPrompt();
+    }
   }
 
   function renderAreaGuide(data) {

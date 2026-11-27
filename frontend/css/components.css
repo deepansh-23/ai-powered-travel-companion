@@ -16,31 +16,35 @@
 }
 
 .navbar-inner {
-  max-width: 1280px;
+  width: 100%;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 0 var(--space-md);
+  padding: 0 28px;
   height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
+  gap: 16px;
 }
 
 .brand-link {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   color: var(--color-primary);
   text-decoration: none;
+  white-space: nowrap;
 }
 
-.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-name { font-size: 1.05rem; }
-.brand-tagline { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.02em; color: var(--color-text-secondary); }
-@media (max-width: 1180px) { .brand-tagline { display: none; } }
+.brand-name {
+  font-size: 1.05rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
 @media (max-width: 520px) { .brand-name { font-size: 0.9rem; } }
 
 .brand-link svg {
@@ -51,6 +55,9 @@
 .nav-links {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 6px;
   list-style: none;
 }
@@ -174,7 +181,9 @@
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 10px;
 }
 
 /* Theme Selector */
@@ -323,6 +332,10 @@
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   border-color: var(--color-border-strong);
+}
+
+.place-card.place-card-247 {
+  border-left: 4px solid var(--color-success);
 }
 
 /* Selected Card State (Section 50.5) */
@@ -940,14 +953,17 @@
 .rate-service-card[hidden] { display: none !important; }
 
 /* Home: top 3 reviews */
-.home-reviews { margin-top: var(--space-2xl); }
+.home-reviews {
+  padding: var(--space-2xl) 0 var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
 .home-reviews-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 .home-reviews-grid {
   display: grid;

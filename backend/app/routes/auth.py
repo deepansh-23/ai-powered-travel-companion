@@ -208,6 +208,8 @@ async def get_delete_request(user: User = Depends(require_user), db: AsyncSessio
 @router.post("/delete-request", dependencies=[Depends(require_same_origin)])
 async def request_account_deletion(req: DeletionRequestBody, user: User = Depends(require_user), db: AsyncSession = Depends(get_db)):
     """Asks an administrator to delete this account. Nothing is deleted until an admin approves it."""
+    if auth_service.is_env_admin(user):
+        raise HTTPException(status_code=403, detail=auth_service.ENV_ADMIN_PROTECTED_MSG)
     from sqlalchemy import select
     reason = " ".join((req.reason or "").split())[:300]
     row = (await db.execute(select(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id))).scalar_one_or_none()

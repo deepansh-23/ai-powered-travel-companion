@@ -30,6 +30,7 @@ from app.routes import (
 from app.db import dispose_db, init_db
 from admin.routes import router as admin_router
 from admin.monitoring import ApiMetricsMiddleware
+from app.services import auth_service
 from app.services.site_settings_guard import MaintenanceModeMiddleware
 from app.services.activity_service import ActivityMiddleware, activity_tracker
 from app.services.usage_service import usage_recorder
@@ -38,6 +39,7 @@ from app.services.usage_service import usage_recorder
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await init_db()      # connect to PostgreSQL and create tables (never blocks startup on failure)
+    await auth_service.ensure_env_admin()  # idempotently bootstrap/sync .env recovery admin if configured
     activity_tracker.start()   # batches usage counters for the admin Analytics page
     usage_recorder.start()     # batches AI / external API call counters for the admin usage monitor
     yield

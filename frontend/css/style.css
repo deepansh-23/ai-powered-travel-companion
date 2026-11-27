@@ -132,8 +132,8 @@ a:hover {
 
 /* Emergency Box (Section 12) */
 .emergency-box {
-  background-color: var(--color-danger-light);
-  border: 1px solid rgba(220, 38, 38, 0.25);
+  background-color: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-danger) 28%, transparent);
   border-left: 4px solid var(--color-danger);
   border-radius: var(--radius-md);
   padding: var(--space-md) var(--space-lg);
@@ -141,6 +141,7 @@ a:hover {
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  box-shadow: var(--shadow-sm);
 }
 
 .emergency-box svg {
@@ -155,9 +156,9 @@ a:hover {
 }
 
 .emergency-box p {
-  color: #7f1d1d;
+  color: var(--color-text-primary);
   font-size: 0.9rem;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 /* Buttons (Section 5.7) */

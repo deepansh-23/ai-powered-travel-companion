@@ -22,6 +22,9 @@ def _captcha_off_by_default(monkeypatch):
     monkeypatch.setattr(settings, "RECAPTCHA_SITE_KEY", None)
     monkeypatch.setattr(settings, "RECAPTCHA_SECRET_KEY", None)
     monkeypatch.setattr(settings, "CAPTCHA_PROVIDER", "recaptcha")
+    monkeypatch.setattr(settings, "ADMIN_USERNAME", None)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", None)
+    monkeypatch.setattr(settings, "ADMIN_EMAIL", None)
 
 
 @pytest.fixture(autouse=True)

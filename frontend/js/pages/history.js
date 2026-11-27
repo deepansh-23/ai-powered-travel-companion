@@ -3,6 +3,7 @@
  */
 
 import { api } from "../api.js";
+import { loadServiceState, createServicePersister } from "../state.js";
 import { renderHistoryItem } from "../components/history.js";
 import { toast } from "../components/toast.js";
 import { escapeHtml } from "../utils/formatters.js";
@@ -13,6 +14,21 @@ function startHistoryPage() {
   const filterButtons = document.querySelectorAll(".history-filter-btn");
 
   let currentFilter = "all";
+
+  const saved = loadServiceState("history");
+  if (saved && typeof saved.currentFilter === "string") {
+    const match = Array.from(filterButtons).find(b => b.dataset.type === saved.currentFilter);
+    if (match) {
+      currentFilter = saved.currentFilter;
+      filterButtons.forEach(b => b.classList.toggle("active", b === match));
+    }
+  }
+
+  const persister = createServicePersister(
+    "history",
+    () => ({ currentFilter }),
+    { debounceMs: 150 }
+  );
 
   // Saved sessions (work in progress) live above the finished History items
   async function loadSavedSessions() {
@@ -32,6 +48,7 @@ function startHistoryPage() {
       filterButtons.forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       currentFilter = btn.dataset.type;
+      persister.saveNow();
       loadHistory();
     });
   });

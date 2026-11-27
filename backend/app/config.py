@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     # (guests then simply start a new guest session after a server restart).
     AUTH_SECRET: Optional[str] = None
 
+    # Environment-configured recovery admin account (optional).
+    # When both ADMIN_USERNAME and ADMIN_PASSWORD are set, startup creates or restores
+    # this admin account and protects it from deletion, deactivation, or demotion.
+    ADMIN_USERNAME: Optional[str] = None
+    ADMIN_PASSWORD: Optional[str] = None
+    ADMIN_EMAIL: Optional[str] = None
+
     # Legacy aliases kept for backward compatibility with old .env files;
     # they are ignored in production — only the canonical names above matter.
     AI_API_KEY: Optional[str] = None         # not used; kept so old .env files don't crash
@@ -111,6 +118,9 @@ class Settings(BaseSettings):
         "DB_PASSWORD",
         "DATABASE_URL",
         "AUTH_SECRET",
+        "ADMIN_USERNAME",
+        "ADMIN_PASSWORD",
+        "ADMIN_EMAIL",
         mode="before"
     )
     @classmethod

@@ -3,7 +3,14 @@
  * Powers Places Near You, Quiet Work Cafés, and 24/7 Medical Care from one single implementation.
  */
 
-import { state } from "../state.js";
+import {
+  state,
+  saveServiceState,
+  loadServiceState,
+  clearServiceState,
+  createServicePersister,
+  hasResolvedWorkspaceScope
+} from "../state.js";
 import { api } from "../api.js";
 import { SharedMapComponent } from "./map.js";
 import { renderPlaceCard } from "./cards.js";
@@ -28,44 +35,81 @@ export class NearbyExplorerController {
     this.mapComponent = null;
     this.routeAbortController = null;
     this.currentSearchAbort = null;
+    this._snapshot = null;
+    this._hasRestored = false;
+    this._userInteracted = false;
+    this._isRestoring = false;
+    this._persister = null;
   }
 
   init() {
     // 1. Initialize Map
     this.mapComponent = new SharedMapComponent(this.config.mapContainerId, {
-      onSelectPlace: (place) => this.handleSelectPlace(place)
+      onSelectPlace: (place) => this.handleSelectPlace(place),
+      onViewChange: (view) => {
+        if (this._isRestoring || !view) return;
+        if (this._snapshot) {
+          this._snapshot.map_view = view;
+          this._persister?.scheduleSave();
+        }
+      }
     });
     this.mapComponent.init();
 
-    // 2. Setup Form & Location Listeners
+    // 2. Setup debounced + lifecycle workspace persister (cross-tab & cross-page)
+    this._persister = createServicePersister(
+      this.config.pageType,
+      () => this.collectWorkspaceState(),
+      {
+        debounceMs: 250,
+        legacySessionKey: this.storageKey,
+        shouldSave: () => !this._isRestoring && (this._hasRestored || this._userInteracted || !!this._snapshot)
+      }
+    );
+
+    // 3. Setup Form & Location Listeners
     this.setupEventListeners();
 
-    // 3. Setup Esc key to deselect
+    // 4. Setup Esc key to deselect
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && state.selectedPlace) {
         state.clearSelection();
       }
     });
 
-    // 4. No auto-search on page load — the user enters their own location
-    // and searches explicitly (Section 50.6 & product rule: don't assume
-    // a default city). Show a neutral prompt state until then.
+    // 5. No auto-search on page load — show a neutral prompt until restored or searched.
     this.renderInitialPrompt();
 
-    // 5. Session persistence + Generate New (Sections 19, 20, 22)
+    // 6. Session persistence + Generate New (Sections 19, 20, 22)
     this.setupGenerateNew();
-    this.restoreFromSession();
+    if (hasResolvedWorkspaceScope() || authManager.ready) {
+      this.restoreFromSession();
+    }
+
+    // Re-check workspace once auth resolves (handles brand-new tabs without loading guest scope for members)
+    const onAuthReady = () => {
+      if (!this._hasRestored && !this._userInteracted) {
+        this.restoreFromSession();
+      }
+    };
+    if (!authManager.ready) {
+      window.addEventListener("slg:auth-ready", onAuthReady, { once: true });
+    }
+
     this.setupGuestNotice();
     initSavedSessions({
       service: this.config.pageType,
       saveButtonId: "btnSaveSession",
-      hasActiveState: () => !!this.loadSnapshot(),
-      buildSave: () => {
+      hasActiveState: () => {
         const snap = this.loadSnapshot();
+        return !!(snap && Array.isArray(snap.places) && snap.places.length > 0);
+      },
+      buildSave: () => {
+        const snap = this.collectWorkspaceState() || this.loadSnapshot();
         const has = !!snap && Array.isArray(snap.places) && snap.places.length > 0;
         return {
           hasContent: has,
-          title: `${RATE_SERVICE_NAMES[this.config.pageType] || "Search"}: ${has ? snap.location : ""}`.trim(),
+          title: `${RATE_SERVICE_NAMES[this.config.pageType] || "Search"}: ${has ? (snap.location || snap.typed_location || "") : ""}`.trim(),
           state: snap
         };
       }
@@ -94,86 +138,134 @@ export class NearbyExplorerController {
     });
   }
 
-  // ---- Session state (temporary, per tab) — separate from persistent History ----
+  // ---- Persistent user-scoped workspace state (cross-page & cross-tab) ----
   get storageKey() {
     return `slg_${this.config.pageType}_state`;
   }
 
-  saveSnapshot(snapshot) {
-    try {
-      sessionStorage.setItem(this.storageKey, JSON.stringify(snapshot));
-    } catch (_) {}
-  }
+  collectWorkspaceState() {
+    const input = document.getElementById(this.config.locationInputId);
+    const radiusSelect = document.getElementById(this.config.radiusSelectId);
+    const typed = input ? input.value : "";
+    const radius = radiusSelect ? parseFloat(radiusSelect.value) : 3.0;
+    const base = this._snapshot ? { ...this._snapshot } : {};
 
-  loadSnapshot() {
-    try {
-      const raw = sessionStorage.getItem(this.storageKey);
-      return raw ? JSON.parse(raw) : null;
-    } catch (_) {
+    if (!base.places && !typed.trim()) {
       return null;
     }
+
+    return {
+      ...base,
+      typed_location: typed,
+      location: base.location || typed.trim(),
+      radius_km: Number.isFinite(radius) ? radius : (base.radius_km || 3.0),
+      active_filters: Array.from(state.activeFilters || ["all"]),
+      selected_place_id: state.selectedPlace ? state.selectedPlace.id : (base.selected_place_id || null),
+      map_view: (this.mapComponent && this.mapComponent.getViewState()) || base.map_view || null,
+      saved_at: new Date().toISOString()
+    };
+  }
+
+  saveSnapshot(snapshot) {
+    this._snapshot = snapshot ? { ...snapshot } : null;
+    if (!snapshot) return;
+    saveServiceState(this.config.pageType, snapshot, { legacySessionKey: this.storageKey });
+  }
+
+  loadSnapshot({ consumeHandoff = false } = {}) {
+    return loadServiceState(this.config.pageType, {
+      legacySessionKey: this.storageKey,
+      consumeHandoff
+    });
   }
 
   restoreFromSession() {
-    const snap = this.loadSnapshot();
-    if (snap) this.applySnapshot(snap);
+    const snap = this.loadSnapshot({ consumeHandoff: true });
+    if (snap) {
+      this._hasRestored = true;
+      this.applySnapshot(snap);
+    }
   }
 
   /**
-   * Rebuilds the full service UI (inputs, chips, cards, map markers, selection)
-   * from a stored snapshot. Used by both session restore and History -> Restore.
+   * Rebuilds the full service UI (inputs, chips, cards, map markers, view, selection)
+   * from a stored snapshot. Used by both workspace restore and History -> Restore.
    */
   applySnapshot(snap) {
     if (!snap) return;
+    this._isRestoring = true;
+    try {
+      this._snapshot = { ...snap };
 
-    const input = document.getElementById(this.config.locationInputId);
-    const label = snap.typed_location || snap.location || "";
-    if (input && label) input.value = label;
+      const input = document.getElementById(this.config.locationInputId);
+      const label = snap.typed_location !== undefined ? snap.typed_location : (snap.location || "");
+      if (input && label) input.value = label;
 
-    const radiusSelect = document.getElementById(this.config.radiusSelectId);
-    if (radiusSelect && snap.radius_km) {
-      const wanted = String(snap.radius_km);
-      if (Array.from(radiusSelect.options).some(o => o.value === wanted)) {
-        radiusSelect.value = wanted;
-      }
-    }
-
-    // Older history records only stored {location, radius_km}: re-run that search.
-    if (!Array.isArray(snap.places) || !snap.center) {
-      if (label) {
-        if (snap.latitude != null && snap.longitude != null) {
-          this.performSearch(null, snap.latitude, snap.longitude);
-        } else {
-          this.performSearch(label);
+      const radiusSelect = document.getElementById(this.config.radiusSelectId);
+      if (radiusSelect && snap.radius_km) {
+        const wanted = String(snap.radius_km);
+        if (Array.from(radiusSelect.options).some(o => o.value === wanted)) {
+          radiusSelect.value = wanted;
         }
       }
-      return;
-    }
 
-    this._lastCounts = snap.counts || {};
-    state.setResults(snap.center, snap.places);
+      // Draft-only state (user typed location / changed radius before searching)
+      if (!Array.isArray(snap.places) || !snap.center) {
+        // Older history records stored {location, radius_km} without places and without typed_location
+        const isLegacyHistoryRecord = !("typed_location" in snap) && (snap.location || (snap.latitude != null && snap.longitude != null));
+        if (isLegacyHistoryRecord) {
+          this._isRestoring = false;
+          if (snap.latitude != null && snap.longitude != null) {
+            this.performSearch(null, snap.latitude, snap.longitude);
+          } else if (snap.location) {
+            this.performSearch(snap.location);
+          }
+        }
+        return;
+      }
 
-    const chipsContainer = document.getElementById(this.config.chipsContainerId);
-    renderFilterChips(chipsContainer, this._lastCounts, () => this.renderVisibleResults());
-    this.renderVisibleResults();
-    this.updateResultsHeader(snap.places.length);
-    this.announceRateState(snap.places.length > 0);
+      this._lastCounts = snap.counts || {};
+      state.setResults(snap.center, snap.places);
 
-    if (snap.data_mode === "mock" && !state.bannerDismissed) {
-      this.showSampleDataBanner();
-    }
+      // Restore active filter chips before rendering chips & visible places
+      if (Array.isArray(snap.active_filters) && snap.active_filters.length > 0) {
+        state.activeFilters = new Set(snap.active_filters.map(f => String(f).toLowerCase()));
+        if (state.activeFilters.size === 0) state.activeFilters.add("all");
+      }
 
-    if (snap.selected_place_id) {
-      const sel = snap.places.find(p => p.id === snap.selected_place_id);
-      if (sel) state.selectPlace(sel);
+      // Queue saved map view before rendering markers so jumpTo honors it cleanly
+      if (snap.map_view && this.mapComponent) {
+        this.mapComponent.setViewState(snap.map_view);
+      }
+
+      const chipsContainer = document.getElementById(this.config.chipsContainerId);
+      renderFilterChips(chipsContainer, this._lastCounts, () => {
+        this._userInteracted = true;
+        this.renderVisibleResults();
+        this._persister?.saveNow();
+      });
+      this.renderVisibleResults();
+      this.announceRateState(snap.places.length > 0);
+
+      if (snap.data_mode === "mock" && !state.bannerDismissed) {
+        this.showSampleDataBanner();
+      }
+
+      if (snap.selected_place_id) {
+        const sel = snap.places.find(p => p.id === snap.selected_place_id);
+        if (sel && state.isPlaceVisible(sel)) state.selectPlace(sel);
+      }
+    } finally {
+      this._isRestoring = false;
     }
   }
 
   persistSelection(place) {
-    const snap = this.loadSnapshot();
-    if (!snap) return;
-    snap.selected_place_id = place ? place.id : null;
-    this.saveSnapshot(snap);
+    if (this._isRestoring) return;
+    if (this._snapshot) {
+      this._snapshot.selected_place_id = place ? place.id : null;
+    }
+    this._persister?.saveNow();
   }
 
   setupGenerateNew() {
@@ -181,14 +273,16 @@ export class NearbyExplorerController {
     if (btn) btn.addEventListener("click", () => this.generateNew());
   }
 
-  /** Resets only THIS service's active input/result state. History is untouched. */
+  /** Resets only THIS service's active input/result state. History and other services are untouched. */
   generateNew() {
     document.querySelectorAll(".guest-save-banner").forEach((n) => n.remove());
     if (this.currentSearchAbort) this.currentSearchAbort.abort();
     if (this.routeAbortController) this.routeAbortController.abort();
-    try {
-      sessionStorage.removeItem(this.storageKey);
-    } catch (_) {}
+    this._snapshot = null;
+    this._hasRestored = false;
+    this._userInteracted = false;
+    if (this._persister) this._persister.clear();
+    else clearServiceState(this.config.pageType, { legacySessionKey: this.storageKey });
     forgetDraft(this.config.pageType);
     state.clearSelection();
     state.setResults(null, []);
@@ -233,11 +327,23 @@ export class NearbyExplorerController {
       });
     }
 
+    const input = document.getElementById(this.config.locationInputId);
+    if (input) {
+      input.addEventListener("input", () => {
+        this._userInteracted = true;
+        this._persister?.scheduleSave();
+      });
+    }
+
     const radiusSelect = document.getElementById(this.config.radiusSelectId);
     if (radiusSelect) {
       radiusSelect.addEventListener("change", () => {
-        const input = document.getElementById(this.config.locationInputId);
-        this.performSearch(input ? input.value : "");
+        this._userInteracted = true;
+        this._persister?.scheduleSave();
+        const locInput = document.getElementById(this.config.locationInputId);
+        if ((locInput && locInput.value.trim()) || state.center) {
+          this.performSearch(locInput ? locInput.value : "");
+        }
       });
     }
 
@@ -341,7 +447,9 @@ export class NearbyExplorerController {
       // Render Filter Chips
       const chipsContainer = document.getElementById(this.config.chipsContainerId);
       renderFilterChips(chipsContainer, countsObj, () => {
+        this._userInteracted = true;
         this.renderVisibleResults();
+        this._persister?.saveNow();
       });
 
       // Render Cards & Map Markers
@@ -368,9 +476,12 @@ export class NearbyExplorerController {
         places: placesList,
         counts: countsObj,
         data_mode: data.data_mode,
+        active_filters: Array.from(state.activeFilters || ["all"]),
         selected_place_id: null,
+        map_view: (this.mapComponent && this.mapComponent.getViewState()) || null,
         saved_at: new Date().toISOString()
       };
+      this._userInteracted = true;
       this.saveSnapshot(snapshot);
       noteGuestResult(this.config.pageType, document.getElementById(this.config.resultsContainerId));
 
@@ -421,10 +532,16 @@ export class NearbyExplorerController {
       const resetBtn = cardsContainer.querySelector("#btnResetFilters");
       if (resetBtn) {
         resetBtn.addEventListener("click", () => {
+          this._userInteracted = true;
           state.setFilter("all");
           const chipsContainer = document.getElementById(this.config.chipsContainerId);
-          renderFilterChips(chipsContainer, this._lastCounts, () => this.renderVisibleResults());
+          renderFilterChips(chipsContainer, this._lastCounts, () => {
+            this._userInteracted = true;
+            this.renderVisibleResults();
+            this._persister?.saveNow();
+          });
           this.renderVisibleResults();
+          this._persister?.saveNow();
         });
       }
       this.updateResultsHeader(0);

@@ -27,7 +27,7 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
-          <span class="brand-text"><span class="brand-name">AI Powered Travel Companion</span><small class="brand-tagline">Explore Your City with Intelligence and Ease</small></span>
+          <span class="brand-name">AI Powered Travel Companion</span>
         </a>
 
         <nav class="nav-links" aria-label="Main Navigation">
@@ -107,81 +107,93 @@
       <!-- Monthly itinerary allowance (shown to logged-in accounts when the admin set a limit) -->
       <div data-itinerary-quota class="quota-note" role="status" hidden></div>
 
-      <!-- Features Grid (Section 7) -->
-      <section class="features-grid" aria-label="Main Application Features">
-        <!-- Feature 1: Itinerary -->
-        <a href="pages/itinerary.html" class="feature-card" style="grid-column:1/-1;border-width:2px;">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      <!-- Featured Flagship Planner -->
+      <section class="home-featured-section" aria-label="Featured Trip Planner">
+        <a href="pages/itinerary.html" class="feature-card feature-card-featured">
+          <div class="feature-featured-left">
+            <div class="feature-icon-wrapper feature-icon-featured">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+            </div>
+            <div class="feature-featured-copy">
+              <div class="feature-title-row">
+                <h2 class="feature-title">Itinerary Planner</h2>
+                <span class="badge badge-primary">Main</span>
+              </div>
+              <p class="feature-description">Plan door to door: pick source and destination, compare outbound &amp; return flights and trains, choose a hotel for each stay, and get a time-aware itinerary with real places, costs, and a downloadable PDF.</p>
+            </div>
           </div>
-          <h2 class="feature-title">Itinerary Planner <span class="badge badge-primary" style="vertical-align:middle;">Main</span></h2>
-          <p class="feature-description">Plan door to door: pick source and destination, compare flights and trains, choose a hotel, then get a time-aware local itinerary with real places, costs and a downloadable PDF.</p>
-          <span class="feature-arrow">Plan Trip &rarr;</span>
+          <span class="feature-arrow feature-featured-cta">Plan Trip &rarr;</span>
         </a>
+      </section>
 
-        <h3 style="grid-column:1/-1;margin-top:8px;">Other Services</h3>
+      <!-- Core Services & Tools Grid (Section 7) -->
+      <section class="home-section" aria-labelledby="homeServicesHeading">
+        <div class="section-header">
+          <h2 id="homeServicesHeading">Explore Local Services &amp; Tools</h2>
+          <p>Everything you need on the ground—verified places, neighbourhood guides, quiet cafés, 24/7 medical care, and saved history.</p>
+        </div>
 
-        <!-- Feature 2: Places Near You -->
-        <a href="pages/places.html" class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          </div>
-          <h2 class="feature-title">Places Near You</h2>
-          <p class="feature-description">Discover hotels, museums, parks, and viewpoints on an interactive map. Filter dynamically and view walking or driving routes in real time.</p>
-          <span class="feature-arrow">Explore Map &rarr;</span>
-        </a>
+        <div class="features-grid" aria-label="Main Application Features">
+          <!-- Feature 2: Places Near You -->
+          <a href="pages/places.html" class="feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <h3 class="feature-title">Places Near You</h3>
+            <p class="feature-description">Discover hotels, museums, parks, and viewpoints on an interactive map. Filter dynamically and view walking or driving routes in real time.</p>
+            <span class="feature-arrow">Explore Map &rarr;</span>
+          </a>
 
-        <!-- Feature 3: Area Guide -->
-        <a href="pages/area.html" class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          </div>
-          <h2 class="feature-title">Area Guide</h2>
-          <p class="feature-description">Understand neighborhoods with 12 analytical sections covering walkability, dining, safety, advantages, limitations, and transit hubs.</p>
-          <span class="feature-arrow">Read Guide &rarr;</span>
-        </a>
+          <!-- Feature 3: Area Guide -->
+          <a href="pages/area.html" class="feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </div>
+            <h3 class="feature-title">Area Guide</h3>
+            <p class="feature-description">Understand neighborhoods with 12 analytical sections covering walkability, dining, safety, advantages, limitations, and transit hubs.</p>
+            <span class="feature-arrow">Read Guide &rarr;</span>
+          </a>
 
-        <!-- Feature 4: Quiet Work Cafés -->
-        <a href="pages/cafes.html" class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
-          </div>
-          <h2 class="feature-title">Quiet Work Cafés</h2>
-          <p class="feature-description">Find study-friendly coffee spots filtered by validated amenities like high-speed Wi-Fi, power charging outlets, quiet zones, and seating.</p>
-          <span class="feature-arrow">Find Workspots &rarr;</span>
-        </a>
+          <!-- Feature 4: Quiet Work Cafés -->
+          <a href="pages/cafes.html" class="feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+            </div>
+            <h3 class="feature-title">Quiet Work Cafés</h3>
+            <p class="feature-description">Find study-friendly coffee spots filtered by validated amenities like high-speed Wi-Fi, power charging outlets, quiet zones, and seating.</p>
+            <span class="feature-arrow">Find Workspots &rarr;</span>
+          </a>
 
-        <!-- Feature 5: 24/7 Medical Care -->
-        <a href="pages/medical.html" class="feature-card">
-          <div class="feature-icon-wrapper" style="background-color:var(--color-danger-light);color:var(--color-danger);">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v12M6 12h12M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/></svg>
-          </div>
-          <h2 class="feature-title">24/7 Medical Care</h2>
-          <p class="feature-description">Locate urgent treatment centers, emergency departments, and late-night dispensaries with verified 24/7 statuses and immediate phone links.</p>
-          <span class="feature-arrow">Locate Care &rarr;</span>
-        </a>
+          <!-- Feature 5: 24/7 Medical Care -->
+          <a href="pages/medical.html" class="feature-card feature-card-medical">
+            <div class="feature-icon-wrapper feature-icon-medical">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v12M6 12h12M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/></svg>
+            </div>
+            <h3 class="feature-title">24/7 Medical Care</h3>
+            <p class="feature-description">Locate urgent treatment centers, emergency departments, and late-night dispensaries with verified 24/7 statuses and immediate phone links.</p>
+            <span class="feature-arrow">Locate Care &rarr;</span>
+          </a>
 
-        <h3 style="grid-column:1/-1;margin-top:8px;">History / PDF &amp; Reviews</h3>
+          <!-- Feature 6: History & Exports -->
+          <a href="pages/history.html" class="feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            </div>
+            <h3 class="feature-title">History &amp; Exports</h3>
+            <p class="feature-description">Review previously generated plans, search results, and neighborhood reports with full PDF exports and text-to-speech audio support.</p>
+            <span class="feature-arrow">View History &rarr;</span>
+          </a>
 
-        <!-- Feature 6: History & Exports -->
-        <a href="pages/history.html" class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
-          </div>
-          <h2 class="feature-title">History & Exports</h2>
-          <p class="feature-description">Review previously generated plans, search results, and neighborhood reports with full PDF exports and text-to-speech audio support.</p>
-          <span class="feature-arrow">View History &rarr;</span>
-        </a>
-
-        <!-- Feature 7: Reviews -->
-        <a href="pages/reviews.html" class="feature-card">
-          <div class="feature-icon-wrapper">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          </div>
-          <h2 class="feature-title">Reviews</h2>
-          <p class="feature-description">Rate AI Powered Travel Companion and read what other travellers have said.</p>
-          <span class="feature-arrow">Read Reviews &rarr;</span>
-        </a>
+          <!-- Feature 7: Reviews -->
+          <a href="pages/reviews.html" class="feature-card">
+            <div class="feature-icon-wrapper">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <h3 class="feature-title">Reviews</h3>
+            <p class="feature-description">Rate AI Powered Travel Companion and read what other travellers have said.</p>
+            <span class="feature-arrow">Read Reviews &rarr;</span>
+          </a>
+        </div>
       </section>
 
       <!-- How It Works Section (Section 7) -->

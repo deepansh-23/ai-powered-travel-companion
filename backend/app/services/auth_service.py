@@ -8,6 +8,7 @@ Security notes:
 """
 
 import hashlib
+import logging
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -22,8 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db_models import AccountDeletionRequest, AuthSession, Feedback, History, LoginAttempt, SavedSession, User, utcnow
 
+logger = logging.getLogger(__name__)
+
 _hasher = PasswordHasher()
 _DUMMY_HASH = _hasher.hash("not-a-real-password-for-timing")
+
+ENV_ADMIN_PROTECTED_MSG = "Cannot delete, disable, or demote the environment-configured recovery admin account."
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,30}$")
 _COMMON_PASSWORDS = {
@@ -53,6 +58,41 @@ class LockedOut(AuthError):
 
 class UsernameTaken(AuthError):
     status_code = 409
+
+
+class EnvAdminProtected(AuthError):
+    status_code = 403
+
+
+def hash_password(password: str) -> str:
+    """Hash a plaintext password using Argon2id."""
+    return _hasher.hash(password)
+
+
+def verify_password(password_hash: str, password: str) -> bool:
+    """Verify a plaintext password against a stored Argon2id hash."""
+    if not password_hash:
+        return False
+    try:
+        return _hasher.verify(password_hash, password or "")
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
+        return False
+
+
+def is_env_admin(user_or_username) -> bool:
+    """Return True if the given User or username matches the configured ADMIN_USERNAME."""
+    configured = (settings.ADMIN_USERNAME or "").strip().lower()[:30]
+    if not configured:
+        return False
+    if isinstance(user_or_username, str):
+        candidate = user_or_username.strip().lower()[:30]
+    else:
+        candidate = (
+            getattr(user_or_username, "username_lower", None)
+            or getattr(user_or_username, "username", "")
+            or ""
+        ).strip().lower()[:30]
+    return bool(candidate) and candidate == configured
 
 
 def _as_utc(dt: datetime) -> datetime:
@@ -223,6 +263,9 @@ async def delete_account(db: AsyncSession, user: User, password: str) -> None:
     Removes the profile, login sessions, history and saved sessions. Reviews stay on the
     Reviews page but are detached from the account (they become anonymous).
     """
+    if is_env_admin(user):
+        raise EnvAdminProtected(ENV_ADMIN_PROTECTED_MSG)
+
     try:
         ok = _hasher.verify(user.password_hash, password or "")
     except (VerifyMismatchError, VerificationError, InvalidHashError):
@@ -278,3 +321,95 @@ async def end_session(db: AsyncSession, raw: Optional[str]) -> None:
     if raw:
         await db.execute(delete(AuthSession).where(AuthSession.token_hash == hash_token(raw)))
         await db.commit()
+
+
+# ---------------------------------------------------------------- env recovery admin
+async def _sync_env_admin(db: AsyncSession, username: str, password: str) -> None:
+    username_lower = username.lower()[:30]
+    user = (await db.execute(select(User).where(User.username_lower == username_lower))).scalar_one_or_none()
+
+    if user is None:
+        user_kwargs = {
+            "username": username,
+            "username_lower": username_lower,
+            "password_hash": hash_password(password),
+            "recovery_code_hash": None,
+            "is_active": True,
+            "is_admin": True,
+        }
+        if hasattr(User, "email"):
+            user_kwargs["email"] = settings.ADMIN_EMAIL or f"{username_lower}@admin.local"
+        db.add(User(**user_kwargs))
+        try:
+            await db.commit()
+            logger.info("Created environment recovery admin account '%s'.", username)
+            return
+        except IntegrityError:
+            await db.rollback()
+            # Concurrent worker startup may have just created the row; re-fetch and sync
+            user = (await db.execute(select(User).where(User.username_lower == username_lower))).scalar_one_or_none()
+            if user is None:
+                raise
+
+    changed = False
+    if user.username != username:
+        user.username = username
+        changed = True
+    if not user.is_active:
+        user.is_active = True
+        changed = True
+    if not getattr(user, "is_admin", False):
+        user.is_admin = True
+        changed = True
+    if hasattr(User, "email") and settings.ADMIN_EMAIL and getattr(user, "email", None) != settings.ADMIN_EMAIL:
+        setattr(user, "email", settings.ADMIN_EMAIL)
+        changed = True
+    if not verify_password(user.password_hash, password) or _hasher.check_needs_rehash(user.password_hash):
+        user.password_hash = hash_password(password)
+        changed = True
+
+    cleared_lockout = await db.execute(
+        delete(LoginAttempt).where(
+            LoginAttempt.username_lower == username_lower,
+            LoginAttempt.success.is_(False),
+        )
+    )
+    cleared_deletion = await db.execute(
+        delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id)
+    )
+
+    if changed or (cleared_lockout.rowcount or 0) > 0 or (cleared_deletion.rowcount or 0) > 0:
+        await db.commit()
+        logger.info("Synced environment recovery admin account '%s'.", username)
+
+
+async def ensure_env_admin(db: Optional[AsyncSession] = None) -> None:
+    """Idempotently create or restore the .env-configured recovery admin account on startup.
+
+    Exits quietly if ADMIN_USERNAME or ADMIN_PASSWORD is not configured or the database is not ready.
+    Never logs or exposes ADMIN_PASSWORD.
+    """
+    username = (settings.ADMIN_USERNAME or "").strip()
+    password = settings.ADMIN_PASSWORD or ""
+    if not username or not password:
+        return
+
+    try:
+        username = validate_username(username)
+    except ValidationFailed as exc:
+        logger.warning("Skipping environment recovery admin bootstrap for '%s': %s", username, exc)
+        return
+
+    try:
+        if db is not None:
+            await _sync_env_admin(db, username, password)
+            return
+
+        from app.db import db_status, session_scope
+        if not db_status().get("ready"):
+            return
+        async with session_scope() as session:
+            await _sync_env_admin(session, username, password)
+    except Exception as exc:
+        # Log only the exception type so credentials/parameters can never leak into logs
+        logger.error("Failed to ensure environment recovery admin '%s': %s", username, type(exc).__name__)

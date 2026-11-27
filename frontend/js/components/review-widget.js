@@ -7,6 +7,7 @@
  */
 
 import { api } from "../api.js";
+import { loadServiceState, createServicePersister, hasResolvedWorkspaceScope } from "../state.js";
 import { toast } from "./toast.js";
 import { escapeHtml, formatDateTime } from "../utils/formatters.js";
 import { authManager } from "./auth.js";
@@ -42,7 +43,7 @@ function pagesPrefix() {
 }
 
 /** Multi-select service chips. Returns { getSelected, setSelected }. */
-export function renderServiceChips(container, selected = []) {
+export function renderServiceChips(container, selected = [], onChange = null) {
   const chosen = new Set(selected);
   const draw = () => {
     container.innerHTML = REVIEW_SERVICES.map(name => `
@@ -57,6 +58,7 @@ export function renderServiceChips(container, selected = []) {
     if (chosen.has(name)) chosen.delete(name);
     else chosen.add(name);
     draw();
+    if (onChange) onChange(REVIEW_SERVICES.filter(n => chosen.has(n)));
   });
   draw();
   return {
@@ -66,7 +68,7 @@ export function renderServiceChips(container, selected = []) {
 }
 
 /** Star picker: returns { getRating, setRating }. */
-export function renderStarPicker(container, initial = 5) {
+export function renderStarPicker(container, initial = 5, onChange = null) {
   let rating = initial;
   const draw = () => {
     container.innerHTML = [1, 2, 3, 4, 5].map(n => `
@@ -77,6 +79,7 @@ export function renderStarPicker(container, initial = 5) {
     if (!btn) return;
     rating = parseInt(btn.dataset.star, 10);
     draw();
+    if (onChange) onChange(rating);
   });
   draw();
   return { getRating: () => rating, setRating: (n) => { rating = n; draw(); } };
@@ -146,11 +149,59 @@ function buildPanel() {
   document.body.appendChild(tab);
   document.body.appendChild(panel);
 
-  const stars = renderStarPicker(panel.querySelector("#rpStars"), 5);
-  const chips = renderServiceChips(panel.querySelector("#rpServices"), [pageDefaultService()]);
   const status = panel.querySelector("#rpStatus");
   const comment = panel.querySelector("#rpComment");
   const submit = panel.querySelector("#rpSubmit");
+
+  let widgetDraftDirty = false;
+  let widgetDraftRestored = false;
+  let stars;
+  let chips;
+
+  const widgetPersister = createServicePersister(
+    "review_widget",
+    () => {
+      const text = comment.value || "";
+      const sel = chips ? chips.getSelected() : [];
+      const r = stars ? stars.getRating() : 5;
+      if (!text.trim() && r === 5 && (!sel.length || (sel.length === 1 && sel[0] === pageDefaultService()))) {
+        return null;
+      }
+      return { rating: r, services: sel, comment: text };
+    },
+    { debounceMs: 250, shouldSave: () => widgetDraftDirty }
+  );
+
+  const onDraftChange = () => {
+    widgetDraftDirty = true;
+    widgetPersister.scheduleSave();
+  };
+
+  stars = renderStarPicker(panel.querySelector("#rpStars"), 5, onDraftChange);
+  chips = renderServiceChips(panel.querySelector("#rpServices"), [pageDefaultService()], onDraftChange);
+  comment.addEventListener("input", onDraftChange);
+
+  const restoreWidgetDraft = () => {
+    if (widgetDraftDirty || widgetDraftRestored) return;
+    const saved = loadServiceState("review_widget");
+    if (!saved) return;
+    widgetDraftRestored = true;
+    if (typeof saved.rating === "number" && saved.rating >= 1 && saved.rating <= 5) {
+      stars.setRating(saved.rating);
+    }
+    if (Array.isArray(saved.services) && saved.services.length) {
+      chips.setSelected(saved.services);
+    }
+    if (typeof saved.comment === "string") {
+      comment.value = saved.comment;
+    }
+  };
+  if (hasResolvedWorkspaceScope() || authManager.ready) {
+    restoreWidgetDraft();
+  }
+  if (!authManager.ready) {
+    window.addEventListener("slg:auth-ready", restoreWidgetDraft, { once: true });
+  }
 
   const setStatus = (msg, kind = "") => { status.textContent = msg; status.className = `review-status ${kind}`; };
 
@@ -208,6 +259,11 @@ function buildPanel() {
       });
       setStatus(`Thank you! Saved for ${saved.length} service${saved.length > 1 ? "s" : ""}.`, "ok");
       comment.value = "";
+      stars.setRating(5);
+      chips.setSelected([pageDefaultService()]);
+      widgetDraftDirty = false;
+      widgetDraftRestored = false;
+      widgetPersister.clear();
       toast.success("Thanks for your review!");
       setTimeout(close, 1400);
     } catch (err) {

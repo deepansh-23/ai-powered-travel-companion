@@ -140,6 +140,19 @@
   white-space: nowrap;
 }
 
+@media (max-width: 1240px) {
+  .navbar-inner {
+    padding: 0 20px;
+    gap: 12px;
+  }
+
+  .nav-link,
+  .nav-dropdown-btn {
+    padding: 7px 10px;
+    font-size: 0.88rem;
+  }
+}
+
 @media (max-width: 1060px) {
   .nav-links {
     display: none;
@@ -389,12 +402,39 @@ a,
     width: 100%;
   }
 
-  .info-section {
+  .info-section,
+  .home-section,
+  .home-reviews {
     padding: var(--space-xl) 0;
   }
 
+  .feature-card-featured {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-md);
+  }
+
+  .feature-featured-left {
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .feature-featured-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .transport-leg-card {
+    padding: var(--space-md);
+  }
+
+  .transport-leg-banner {
+    margin: calc(var(--space-md) * -1) calc(var(--space-md) * -1) var(--space-md) calc(var(--space-md) * -1);
+    padding: 12px 14px;
+  }
+
   .features-grid {
-    margin: var(--space-xl) 0;
+    margin: 0;
   }
 
   .features-grid>* {

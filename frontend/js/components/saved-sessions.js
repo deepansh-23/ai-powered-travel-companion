@@ -10,6 +10,7 @@ import { api } from "../api.js";
 import { authManager } from "./auth.js";
 import { toast } from "./toast.js";
 import { escapeHtml, formatDateTime } from "../utils/formatters.js";
+import { setExplicitServiceHandoff } from "../state.js";
 
 export const SERVICES = {
   itinerary: { label: "Itinerary Planner", page: "itinerary.html", key: "slg_session_itinerary" },
@@ -32,7 +33,7 @@ export async function resumeSession(id) {
   const full = await api.getSession(id);
   const svc = SERVICES[full.service];
   if (!svc) throw new Error("Unknown service in saved session.");
-  sessionStorage.setItem(svc.key, JSON.stringify(full.state));
+  setExplicitServiceHandoff(full.service, full.state, { legacySessionKey: svc.key });
   sessionStorage.setItem(draftKey(full.service), full.id); // further saves update this draft
   const target = (inPages() ? "" : "pages/") + svc.page;
   if (location.pathname.endsWith(svc.page)) location.reload();

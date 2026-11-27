@@ -21,6 +21,8 @@ export class SharedMapComponent {
     this.currentBounds = null;
 
     this.onSelectPlaceCallback = options.onSelectPlace || null;
+    this.onViewChangeCallback = options.onViewChange || null;
+    this._pendingView = null;
 
     // Listen to theme switch to update basemap style
     state.subscribe("theme", (newTheme) => {
@@ -70,14 +72,24 @@ export class SharedMapComponent {
         // Re-spread overlapping markers whenever the view changes, so
         // nearby places (e.g. several cafés in the same small market)
         // never render as one indistinguishable stacked blob.
-        this.map.on("zoomend", () => this._declutterMarkers());
-        this.map.on("moveend", () => this._declutterMarkers());
+        this.map.on("zoomend", () => {
+          this._declutterMarkers();
+          if (this.onViewChangeCallback) this.onViewChangeCallback(this.getViewState());
+        });
+        this.map.on("moveend", () => {
+          this._declutterMarkers();
+          if (this.onViewChangeCallback) this.onViewChangeCallback(this.getViewState());
+        });
 
         // Trigger pending render if places were set before map finished loading
         if (this._pendingRender) {
           const { center, places } = this._pendingRender;
           this._pendingRender = null;
           this.renderMarkers(center, places);
+        } else if (this._pendingView) {
+          const view = this._pendingView;
+          this._pendingView = null;
+          this.map.jumpTo({ center: view.center, zoom: view.zoom });
         }
       });
 
@@ -88,6 +100,34 @@ export class SharedMapComponent {
     } catch (err) {
       console.error("Map initialization failed:", err);
       this.showMapFailed("Basemap tiles could not load. Your results remain fully accessible below.");
+    }
+  }
+
+  getViewState() {
+    if (!this.map || !this.isLoaded) return this._pendingView || null;
+    try {
+      const c = this.map.getCenter();
+      return {
+        center: [Number(c.lng.toFixed(6)), Number(c.lat.toFixed(6))],
+        zoom: Number(this.map.getZoom().toFixed(2))
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  setViewState(view) {
+    if (!view || !Array.isArray(view.center) || view.center.length !== 2) return;
+    const lng = Number(view.center[0]);
+    const lat = Number(view.center[1]);
+    const zoom = Number(view.zoom);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat) || !Number.isFinite(zoom)) return;
+    const clean = { center: [lng, lat], zoom };
+    if (this.map && this.isLoaded) {
+      this._pendingView = null;
+      this.map.jumpTo(clean);
+    } else {
+      this._pendingView = clean;
     }
   }
 
@@ -276,10 +316,20 @@ export class SharedMapComponent {
       boundsPoints.push([place.longitude, place.latitude]);
     });
 
-    // 3. Fit bounds
+    // 3. Fit bounds (or honor restored view state once)
     if (boundsPoints.length > 0) {
       this.currentBounds = computeBounds(boundsPoints);
-      this.fitToVisible();
+      if (this._pendingView) {
+        const view = this._pendingView;
+        this._pendingView = null;
+        this.map.jumpTo({ center: view.center, zoom: view.zoom });
+      } else {
+        this.fitToVisible();
+      }
+    } else if (this._pendingView) {
+      const view = this._pendingView;
+      this._pendingView = null;
+      this.map.jumpTo({ center: view.center, zoom: view.zoom });
     }
 
     // Spread any markers that land on top of each other (common for places
